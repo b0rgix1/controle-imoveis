@@ -333,6 +333,18 @@ function LoginScreen() {
             Organize imóveis, inquilinos, contratos, cobranças mensais, recibos e relatórios financeiros em um único painel profissional.
           </p>
 
+          <div className="mt-6 flex flex-col gap-3 text-sm text-slate-300 sm:flex-row sm:flex-wrap">
+            <a href="https://wa.me/5586995574654" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 hover:bg-white/10">
+              WhatsApp: (86) 99557-4654
+            </a>
+            <a href="https://instagram.com/b0rgix" target="_blank" rel="noreferrer" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 hover:bg-white/10">
+              Instagram: @b0rgix
+            </a>
+            <a href="mailto:Williamjrw3@gmail.com" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 hover:bg-white/10">
+              E-mail: Williamjrw3@gmail.com
+            </a>
+          </div>
+
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
               <Wallet className="mb-3 text-emerald-300" size={26} />
@@ -400,6 +412,15 @@ function LoginScreen() {
             >
               {mode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}
             </button>
+
+            <div className="mt-6 rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">Suporte e implantação</p>
+              <div className="mt-2 space-y-1">
+                <p>WhatsApp: <a className="font-medium text-slate-900" href="https://wa.me/5586995574654" target="_blank" rel="noreferrer">(86) 99557-4654</a></p>
+                <p>Instagram: <a className="font-medium text-slate-900" href="https://instagram.com/b0rgix" target="_blank" rel="noreferrer">@b0rgix</a></p>
+                <p>E-mail: <a className="font-medium text-slate-900" href="mailto:Williamjrw3@gmail.com">Williamjrw3@gmail.com</a></p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
