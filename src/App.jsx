@@ -170,6 +170,137 @@ function generateReceiptPDF(payment) {
   doc.save(`recibo-${tenantName.replaceAll(" ", "-").toLowerCase()}-${reference.replace("/", "-")}.pdf`);
 }
 
+function addContractText(doc, text, x, y, maxWidth = 170, lineHeight = 6) {
+  const lines = doc.splitTextToSize(text, maxWidth);
+  doc.text(lines, x, y);
+  return y + lines.length * lineHeight;
+}
+
+function ensureContractPageSpace(doc, y, needed = 30) {
+  if (y + needed > 275) {
+    doc.addPage();
+    return 25;
+  }
+  return y;
+}
+
+function generateLeaseContractPDF(contract, profile) {
+  if (!profile?.nome_completo) {
+    alert("Preencha a aba Perfil antes de gerar o contrato.");
+    return;
+  }
+
+  const property = contract.propriedades || {};
+  const tenant = contract.inquilinos || {};
+  const doc = new jsPDF();
+  let y = 22;
+
+  const landlordAddress = [profile.endereco, profile.cidade, profile.estado, profile.cep].filter(Boolean).join(", ");
+  const tenantAddress = [tenant.endereco, tenant.cidade, tenant.estado, tenant.cep].filter(Boolean).join(", ");
+  const propertyAddress = [property.endereco, property.bairro, property.cidade, property.estado, property.cep].filter(Boolean).join(", ");
+  const rentValue = currency(contract.valor_aluguel);
+  const lateFine = currency(contract.multa_atraso || 0);
+  const lateInterest = currency(contract.juros_atraso || 0);
+  const deposit = currency(contract.caucao || 0);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("CONTRATO PARTICULAR DE LOCAÇÃO DE IMÓVEL", 105, y, { align: "center" });
+  y += 12;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+
+  y = addContractText(doc, `Pelo presente instrumento particular, de um lado, como LOCADOR(A), ${profile.nome_completo || "não informado"}, inscrito(a) no CPF/CNPJ sob nº ${profile.documento || "não informado"}, RG nº ${profile.rg || "não informado"}, ${profile.nacionalidade || ""}, ${profile.estado_civil || ""}, ${profile.profissao || ""}, residente e domiciliado(a) em ${landlordAddress || "endereço não informado"}; e, de outro lado, como LOCATÁRIO(A), ${tenant.nome || "não informado"}, inscrito(a) no CPF/CNPJ sob nº ${tenant.documento || "não informado"}, RG nº ${tenant.rg || "não informado"}, ${tenant.nacionalidade || ""}, ${tenant.estado_civil || ""}, ${tenant.profissao || ""}, residente e domiciliado(a) em ${tenantAddress || "endereço não informado"}, têm entre si justo e contratado o presente Contrato de Locação de Imóvel, mediante as cláusulas e condições seguintes:`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 35);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 1ª - DO IMÓVEL", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, `O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado ${property.nome || "não informado"}, situado em ${propertyAddress || property.endereco || "endereço não informado"}, do tipo ${property.tipo || "não informado"}, com a seguinte descrição: ${property.descricao || property.observacoes || "sem descrição adicional"}.`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 35);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 2ª - DO PRAZO", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, `O prazo da locação inicia-se em ${formatDateBR(contract.data_inicio)} e termina em ${contract.data_fim ? formatDateBR(contract.data_fim) : "prazo indeterminado"}, podendo ser renovado mediante acordo entre as partes.`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 3ª - DO ALUGUEL E VENCIMENTO", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, `O aluguel mensal será de ${rentValue}, com vencimento todo dia ${contract.dia_vencimento} de cada mês, devendo ser pago pelo LOCATÁRIO ao LOCADOR na forma acordada entre as partes.`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 4ª - DA MULTA, JUROS E ENCARGOS", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, `Em caso de atraso no pagamento, incidirá multa de ${lateFine} e juros de ${lateInterest}, sem prejuízo de outros encargos eventualmente pactuados. O LOCATÁRIO também se responsabiliza por despesas ordinárias vinculadas ao uso do imóvel, quando aplicável, tais como água, energia, condomínio e demais encargos de consumo.`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 35);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 5ª - DA CAUÇÃO", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, `Fica ajustada caução no valor de ${deposit}. A devolução da caução, quando cabível, dependerá da entrega do imóvel nas condições pactuadas e da inexistência de débitos pendentes.`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 6ª - DAS OBRIGAÇÕES DO LOCATÁRIO", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, "O LOCATÁRIO obriga-se a conservar o imóvel, utilizá-lo exclusivamente para a finalidade contratada, não realizar modificações sem autorização prévia do LOCADOR, pagar pontualmente os valores devidos e devolver o imóvel ao final da locação em bom estado de conservação, ressalvado o desgaste natural pelo uso regular.", 20, y);
+
+  y = ensureContractPageSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 7ª - DAS OBRIGAÇÕES DO LOCADOR", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, "O LOCADOR obriga-se a entregar o imóvel em condições de uso, respeitar a posse direta do LOCATÁRIO durante a vigência do contrato e cumprir as obrigações legais aplicáveis à locação.", 20, y);
+
+  y = ensureContractPageSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 8ª - DA RESCISÃO", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, "O descumprimento de qualquer obrigação contratual poderá ensejar a rescisão do presente contrato, sem prejuízo da cobrança dos valores devidos, multas, perdas e danos, conforme a legislação aplicável.", 20, y);
+
+  y = ensureContractPageSpace(doc, y, 40);
+  doc.setFont("helvetica", "bold");
+  doc.text("CLÁUSULA 9ª - DO FORO", 20, y);
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  y = addContractText(doc, `Fica eleito o foro da comarca de ${profile.cidade || tenant.cidade || "cidade não informada"}/${profile.estado || tenant.estado || "UF"} para dirimir eventuais controvérsias decorrentes deste contrato, salvo disposição legal em contrário.`, 20, y);
+
+  y = ensureContractPageSpace(doc, y, 70);
+  y += 8;
+  y = addContractText(doc, `E por estarem justas e contratadas, as partes assinam o presente instrumento em duas vias de igual teor e forma.`, 20, y);
+  y += 12;
+  doc.text(`${profile.cidade || "Cidade"}/${profile.estado || "UF"}, ${formatDateBR(new Date().toISOString().slice(0, 10))}.`, 20, y);
+
+  y += 30;
+  doc.line(25, y, 90, y);
+  doc.line(120, y, 185, y);
+  y += 6;
+  doc.setFontSize(10);
+  doc.text("LOCADOR(A)", 57, y, { align: "center" });
+  doc.text("LOCATÁRIO(A)", 152, y, { align: "center" });
+  y += 6;
+  doc.text(profile.nome_completo || "", 57, y, { align: "center" });
+  doc.text(tenant.nome || "", 152, y, { align: "center" });
+
+  doc.setFontSize(8);
+  doc.text("Documento gerado pelo sistema Controle de Imóveis. Recomenda-se revisão jurídica antes da assinatura.", 105, 288, { align: "center" });
+
+  const filenameTenant = (tenant.nome || "inquilino").replaceAll(" ", "-").toLowerCase();
+  const filenameProperty = (property.nome || "imovel").replaceAll(" ", "-").toLowerCase();
+  doc.save(`contrato-${filenameTenant}-${filenameProperty}.pdf`);
+}
+
 function getMonthName(monthIndex) {
   const months = [
     "Janeiro",
@@ -563,13 +694,13 @@ export default function App() {
 
       const contractsRes = await supabase
         .from("contratos")
-        .select("*, propriedades(nome), inquilinos(nome, telefone, documento)")
+        .select("*, propriedades(*), inquilinos(*)")
         .eq("user_id", session.user.id)
         .order("criado_em", { ascending: false });
 
       const paymentsRes = await supabase
         .from("pagamentos")
-        .select("*, contratos(id, propriedades(nome), inquilinos(nome, telefone, documento))")
+        .select("*, contratos(id, propriedades(*), inquilinos(*))")
         .eq("user_id", session.user.id)
         .order("criado_em", { ascending: false });
 
@@ -1022,7 +1153,7 @@ export default function App() {
           valor_aluguel: rentValue,
           status: contractForm.status,
         })
-        .select("*, propriedades(nome), inquilinos(nome, telefone, documento)")
+        .select("*, propriedades(*), inquilinos(*)")
         .single();
 
       if (insertError) {
@@ -1043,7 +1174,7 @@ export default function App() {
         const { data: insertedPayments, error: paymentError } = await supabase
           .from("pagamentos")
           .insert(generatedPayments)
-          .select("*, contratos(id, propriedades(nome), inquilinos(nome, telefone, documento))");
+          .select("*, contratos(id, propriedades(*), inquilinos(*))");
 
         if (paymentError) {
           setError(`Contrato salvo, mas houve erro ao gerar pagamentos: ${paymentError.message}`);
@@ -1117,7 +1248,7 @@ export default function App() {
       const { data: insertedPayments, error: paymentError } = await supabase
         .from("pagamentos")
         .insert(missingPayments)
-        .select("*, contratos(id, propriedades(nome), inquilinos(nome, telefone, documento))");
+        .select("*, contratos(id, propriedades(*), inquilinos(*))");
 
       if (paymentError) {
         setError(paymentError.message);
@@ -1249,7 +1380,7 @@ export default function App() {
         status: "Pago",
       })
       .eq("id", payment.id)
-      .select("*, contratos(id, propriedades(nome), inquilinos(nome, telefone, documento))")
+      .select("*, contratos(id, propriedades(*), inquilinos(*))")
       .single();
 
     if (updateError) {
@@ -1273,7 +1404,7 @@ export default function App() {
         status: "Pendente",
       })
       .eq("id", payment.id)
-      .select("*, contratos(id, propriedades(nome), inquilinos(nome, telefone, documento))")
+      .select("*, contratos(id, propriedades(*), inquilinos(*))")
       .single();
 
     if (updateError) {
@@ -1860,6 +1991,9 @@ export default function App() {
                               <div className="flex flex-col items-start gap-2 md:items-end">
                                 <p className="text-xl font-bold">{currency(contract.valor_aluguel)}</p>
                                 <Badge>{contract.status}</Badge>
+                                <Button onClick={() => generateLeaseContractPDF(contract, profile)} className="rounded-2xl" size="sm">
+                                  Gerar contrato PDF
+                                </Button>
                                 <Button onClick={() => generatePaymentsForContract(contract)} variant="outline" className="rounded-2xl" size="sm">
                                   Gerar/Atualizar cobranças
                                 </Button>
