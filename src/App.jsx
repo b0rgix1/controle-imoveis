@@ -28,50 +28,170 @@ import jsPDF from "jspdf";
 
 function generateLeaseContractPDF(contract, profile) {
   const doc = new jsPDF();
-
   const tenant = contract.inquilinos || {};
   const property = contract.propriedades || {};
 
-  let y = 20;
+  const hasMulta = Number(contract.multa_atraso || 0) > 0;
+  const hasJuros = Number(contract.juros_atraso || 0) > 0;
+  const hasCaucao = Number(contract.caucao || 0) > 0;
 
-  doc.setFontSize(14);
-  doc.text("CONTRATO DE LOCAÇÃO", 10, y);
+  const landlordAddress = [profile?.endereco, profile?.cidade, profile?.estado, profile?.cep]
+    .filter(Boolean)
+    .join(", ");
+  const tenantAddress = [tenant?.endereco, tenant?.cidade, tenant?.estado, tenant?.cep]
+    .filter(Boolean)
+    .join(", ");
+  const propertyAddress = [property?.endereco, property?.bairro, property?.cidade, property?.estado, property?.cep]
+    .filter(Boolean)
+    .join(", ");
 
-  y += 10;
+  let y = 22;
+  const marginX = 20;
+  const pageWidth = 170;
+  const lineHeight = 6;
+
+  function addPageIfNeeded(extraSpace = 24) {
+    if (y + extraSpace > 275) {
+      doc.addPage();
+      y = 22;
+    }
+  }
+
+  function title(text) {
+    addPageIfNeeded(16);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(text, marginX, y);
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+  }
+
+  function paragraph(text) {
+    const lines = doc.splitTextToSize(text, pageWidth);
+    addPageIfNeeded(lines.length * lineHeight + 8);
+    doc.text(lines, marginX, y);
+    y += lines.length * lineHeight + 5;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("CONTRATO PARTICULAR DE LOCAÇÃO DE IMÓVEL", 105, y, { align: "center" });
+  y += 14;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+
+  paragraph(
+    `Pelo presente instrumento particular, de um lado, como LOCADOR(A), ${profile?.nome_completo || "não informado"}, ${profile?.nacionalidade || ""}, ${profile?.estado_civil || ""}, ${profile?.profissao || ""}, portador(a) do ${getDocumentLabel(profile?.documento)} nº ${profile?.documento || "não informado"}${profile?.rg ? `, RG nº ${profile.rg}` : ""}, residente e domiciliado(a) em ${landlordAddress || "endereço não informado"}; e, de outro lado, como LOCATÁRIO(A), ${tenant?.nome || "não informado"}, ${tenant?.nacionalidade || ""}, ${tenant?.estado_civil || ""}, ${tenant?.profissao || ""}, portador(a) do ${getDocumentLabel(tenant?.documento)} nº ${tenant?.documento || "não informado"}${tenant?.rg ? `, RG nº ${tenant.rg}` : ""}, residente e domiciliado(a) em ${tenantAddress || "endereço não informado"}, resolvem celebrar o presente contrato de locação de imóvel, mediante as cláusulas e condições seguintes:`
+  );
+
+  title("CLÁUSULA 1ª - DO IMÓVEL");
+  paragraph(
+    `O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado ${property?.nome || "não informado"}, localizado em ${propertyAddress || property?.endereco || "endereço não informado"}${property?.tipo ? `, do tipo ${property.tipo}` : ""}. O imóvel deverá ser utilizado exclusivamente para a finalidade ajustada entre as partes, sendo vedada a alteração de sua destinação sem autorização expressa do LOCADOR.`
+  );
+
+  title("CLÁUSULA 2ª - DO PRAZO");
+  paragraph(
+    `O prazo da locação inicia-se em ${formatDateBR(contract.data_inicio)}${contract.data_fim ? ` e encerra-se em ${formatDateBR(contract.data_fim)}` : ", vigorando por prazo indeterminado"}. A continuidade da ocupação após o término do prazo dependerá de acordo entre as partes, observadas as condições legais aplicáveis.`
+  );
+
+  title("CLÁUSULA 3ª - DO ALUGUEL E FORMA DE PAGAMENTO");
+  paragraph(
+    `O aluguel mensal será de ${currency(contract.valor_aluguel)}, com vencimento todo dia ${contract.dia_vencimento} de cada mês. O pagamento deverá ser realizado pelo LOCATÁRIO ao LOCADOR na forma combinada entre as partes, ficando o LOCATÁRIO responsável pela comprovação do pagamento quando solicitado.`
+  );
+
+  if (hasMulta || hasJuros) {
+    title("CLÁUSULA 4ª - DO ATRASO NO PAGAMENTO");
+    const parts = [];
+    if (hasMulta) parts.push(`multa de ${currency(contract.multa_atraso)}`);
+    if (hasJuros) parts.push(`juros de ${contract.juros_atraso}% ao mês`);
+    paragraph(
+      `Em caso de atraso no pagamento do aluguel, incidirá ${parts.join(" e ")} sobre os valores em aberto, sem prejuízo da cobrança de demais encargos, despesas e medidas cabíveis para regularização do débito.`
+    );
+  }
+
+  if (hasCaucao) {
+    title("CLÁUSULA 5ª - DA CAUÇÃO");
+    paragraph(
+      `O LOCATÁRIO entregará ao LOCADOR a quantia de ${currency(contract.caucao)} a título de caução/garantia contratual. A devolução da caução, quando cabível, ocorrerá após a entrega do imóvel, desde que inexistam débitos pendentes, danos ao imóvel ou descumprimento das obrigações assumidas neste contrato.`
+    );
+  }
+
+  title("CLÁUSULA 6ª - DOS ENCARGOS E DESPESAS");
+  paragraph(
+    "Salvo disposição em contrário, serão de responsabilidade do LOCATÁRIO as despesas decorrentes do uso do imóvel, incluindo consumo de água, energia elétrica, gás, internet, condomínio ordinário e demais encargos que estejam relacionados à ocupação e utilização do imóvel durante a vigência da locação."
+  );
+
+  title("CLÁUSULA 7ª - DA CONSERVAÇÃO DO IMÓVEL");
+  paragraph(
+    "O LOCATÁRIO declara receber o imóvel em condições de uso e obriga-se a conservá-lo, mantendo instalações, paredes, pisos, portas, janelas, equipamentos e demais componentes em bom estado. Qualquer dano causado por mau uso, negligência ou intervenção não autorizada deverá ser reparado pelo LOCATÁRIO."
+  );
+
+  title("CLÁUSULA 8ª - DAS BENFEITORIAS E ALTERAÇÕES");
+  paragraph(
+    "O LOCATÁRIO não poderá realizar reformas, modificações estruturais, ampliações, pinturas especiais, instalações fixas ou qualquer alteração relevante no imóvel sem autorização prévia e expressa do LOCADOR. Benfeitorias não autorizadas não gerarão direito de retenção, indenização ou compensação, salvo acordo escrito entre as partes."
+  );
+
+  title("CLÁUSULA 9ª - DA SUBLOCAÇÃO E CESSÃO");
+  paragraph(
+    "É vedado ao LOCATÁRIO sublocar, ceder, emprestar ou transferir a terceiros, total ou parcialmente, o imóvel objeto deste contrato, sem autorização prévia e expressa do LOCADOR."
+  );
+
+  title("CLÁUSULA 10ª - DA RESCISÃO");
+  paragraph(
+    "O descumprimento de qualquer cláusula deste contrato poderá ensejar sua rescisão, independentemente de notificação judicial, sem prejuízo da cobrança de aluguéis, encargos, multas, perdas e danos eventualmente devidos. A rescisão também poderá ocorrer por acordo entre as partes, preferencialmente formalizado por escrito."
+  );
+
+  title("CLÁUSULA 11ª - DA DEVOLUÇÃO DO IMÓVEL");
+  paragraph(
+    "Ao término da locação, o LOCATÁRIO deverá devolver o imóvel livre de pessoas e bens, em boas condições de conservação e uso, ressalvado o desgaste natural decorrente do uso regular, bem como quitar todos os débitos relacionados ao período de ocupação."
+  );
+
+  if (contract.observacoes) {
+    title("CLÁUSULA 12ª - DISPOSIÇÕES ADICIONAIS");
+    paragraph(contract.observacoes);
+  }
+
+  title("CLÁUSULA FINAL - DO FORO");
+  paragraph(
+    `Fica eleito o foro da comarca de ${profile?.cidade || tenant?.cidade || "cidade não informada"}/${profile?.estado || tenant?.estado || "UF"}, para dirimir quaisquer dúvidas oriundas deste contrato, salvo disposição legal em contrário.`
+  );
+
+  addPageIfNeeded(80);
+  y += 8;
+  paragraph(
+    "E por estarem justas e contratadas, as partes assinam o presente instrumento em duas vias de igual teor e forma, juntamente com testemunhas, quando houver."
+  );
+
+  doc.text(`${profile?.cidade || "Cidade"}/${profile?.estado || "UF"}, ${formatDateBR(new Date().toISOString().slice(0, 10))}.`, marginX, y);
+  y += 30;
+
+  doc.line(25, y, 90, y);
+  doc.line(120, y, 185, y);
+  y += 6;
   doc.setFontSize(10);
+  doc.text("LOCADOR(A)", 57, y, { align: "center" });
+  doc.text("LOCATÁRIO(A)", 152, y, { align: "center" });
+  y += 6;
+  doc.text(profile?.nome_completo || "", 57, y, { align: "center" });
+  doc.text(tenant?.nome || "", 152, y, { align: "center" });
 
-  doc.text(`Locador: ${profile?.nome_completo || "Não informado"}`, 10, y); y += 6;
-  doc.text(`CPF/CNPJ: ${profile?.documento || "Não informado"}`, 10, y); y += 6;
-  doc.text(`Telefone: ${profile?.telefone || "Não informado"}`, 10, y); y += 10;
+  y += 28;
+  doc.line(25, y, 90, y);
+  doc.line(120, y, 185, y);
+  y += 6;
+  doc.text("TESTEMUNHA 1", 57, y, { align: "center" });
+  doc.text("TESTEMUNHA 2", 152, y, { align: "center" });
 
-  doc.text(`Locatário: ${tenant.nome || "Não informado"}`, 10, y); y += 6;
-  doc.text(`Documento: ${tenant.documento || "Não informado"}`, 10, y); y += 6;
-  doc.text(`Telefone: ${tenant.telefone || "Não informado"}`, 10, y); y += 10;
+  doc.setFontSize(8);
+  doc.text("Documento gerado pelo sistema Controle de Imóveis. Recomenda-se revisão jurídica antes da assinatura.", 105, 288, { align: "center" });
 
-  doc.text(`Imóvel: ${property.nome || "Não informado"}`, 10, y); y += 6;
-  doc.text(`Endereço: ${property.endereco || "Não informado"}`, 10, y); y += 10;
-
-  doc.text(`Aluguel: ${currency(contract.valor_aluguel)}`, 10, y); y += 6;
-  doc.text(`Vencimento: Dia ${contract.dia_vencimento}`, 10, y); y += 6;
-  doc.text(`Multa: ${contract.multa_atraso}`, 10, y); y += 6;
-  doc.text(`Juros: ${contract.juros_atraso}`, 10, y); y += 6;
-  doc.text(`Caução: ${contract.caucao}`, 10, y); y += 10;
-
-  doc.text(`Início: ${formatDateBR(contract.data_inicio)}`, 10, y); y += 6;
-  doc.text(`Fim: ${contract.data_fim ? formatDateBR(contract.data_fim) : "Indeterminado"}`, 10, y); y += 15;
-
-  doc.text("Assinaturas:", 10, y);
-  y += 20;
-
-  doc.text("______________________________", 10, y);
-  doc.text("Locador", 10, y + 5);
-
-  doc.text("______________________________", 110, y);
-  doc.text("Locatário", 110, y + 5);
-
-  const nome = (tenant.nome || "inquilino").replace(/\s+/g, "-").toLowerCase();
-  doc.save(`contrato-${nome}.pdf`);
+  const fileTenant = String(tenant?.nome || "inquilino").split(" ").filter(Boolean).join("-").toLowerCase();
+  const fileProperty = String(property?.nome || "imovel").split(" ").filter(Boolean).join("-").toLowerCase();
+  doc.save(`contrato-${fileTenant}-${fileProperty}.pdf`);
 }
+
 
 function currency(value) {
   const number = Number(value || 0);
