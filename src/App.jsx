@@ -26,6 +26,53 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "./lib/supabase";
 import jsPDF from "jspdf";
 
+function generateLeaseContractPDF(contract, profile) {
+  const doc = new jsPDF();
+
+  const tenant = contract.inquilinos || {};
+  const property = contract.propriedades || {};
+
+  let y = 20;
+
+  doc.setFontSize(14);
+  doc.text("CONTRATO DE LOCAÇÃO", 10, y);
+
+  y += 10;
+  doc.setFontSize(10);
+
+  doc.text(`Locador: ${profile?.nome_completo || "Não informado"}`, 10, y); y += 6;
+  doc.text(`CPF/CNPJ: ${profile?.documento || "Não informado"}`, 10, y); y += 6;
+  doc.text(`Telefone: ${profile?.telefone || "Não informado"}`, 10, y); y += 10;
+
+  doc.text(`Locatário: ${tenant.nome || "Não informado"}`, 10, y); y += 6;
+  doc.text(`Documento: ${tenant.documento || "Não informado"}`, 10, y); y += 6;
+  doc.text(`Telefone: ${tenant.telefone || "Não informado"}`, 10, y); y += 10;
+
+  doc.text(`Imóvel: ${property.nome || "Não informado"}`, 10, y); y += 6;
+  doc.text(`Endereço: ${property.endereco || "Não informado"}`, 10, y); y += 10;
+
+  doc.text(`Aluguel: ${currency(contract.valor_aluguel)}`, 10, y); y += 6;
+  doc.text(`Vencimento: Dia ${contract.dia_vencimento}`, 10, y); y += 6;
+  doc.text(`Multa: ${contract.multa_atraso}`, 10, y); y += 6;
+  doc.text(`Juros: ${contract.juros_atraso}`, 10, y); y += 6;
+  doc.text(`Caução: ${contract.caucao}`, 10, y); y += 10;
+
+  doc.text(`Início: ${formatDateBR(contract.data_inicio)}`, 10, y); y += 6;
+  doc.text(`Fim: ${contract.data_fim ? formatDateBR(contract.data_fim) : "Indeterminado"}`, 10, y); y += 15;
+
+  doc.text("Assinaturas:", 10, y);
+  y += 20;
+
+  doc.text("______________________________", 10, y);
+  doc.text("Locador", 10, y + 5);
+
+  doc.text("______________________________", 110, y);
+  doc.text("Locatário", 110, y + 5);
+
+  const nome = (tenant.nome || "inquilino").replace(/\s+/g, "-").toLowerCase();
+  doc.save(`contrato-${nome}.pdf`);
+}
+
 function currency(value) {
   const number = Number(value || 0);
   return number.toLocaleString("pt-BR", {
@@ -178,7 +225,7 @@ function generateMonthlyPayments({ userId, contractId, startDate, endDate, dueDa
     if (dueDate >= today) {
       payments.push({
         user_id: userId,
-      contrato_id: contractId,
+        contrato_id: contractId,
         referencia_mes: `${getMonthName(month)}/${year}`,
         data_vencimento: dueDate.toISOString().slice(0, 10),
         valor: Number(amount || 0),
@@ -959,20 +1006,20 @@ export default function App() {
       }
 
       setTenantForm({
-      nome: "",
-      telefone: "",
-      documento: "",
-      email: "",
-      rg: "",
-      data_nascimento: "",
-      nacionalidade: "Brasileiro(a)",
-      estado_civil: "",
-      profissao: "",
-      endereco: "",
-      cidade: "",
-      estado: "",
-      cep: "",
-    });
+        nome: "",
+        telefone: "",
+        documento: "",
+        email: "",
+        rg: "",
+        data_nascimento: "",
+        nacionalidade: "Brasileiro(a)",
+        estado_civil: "",
+        profissao: "",
+        endereco: "",
+        cidade: "",
+        estado: "",
+        cep: "",
+      });
       setEditingTenantId(null);
       setShowTenantForm(false);
     } catch (err) {
@@ -1483,11 +1530,10 @@ export default function App() {
                     setActive(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
-                    active === item.id
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${active === item.id
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100"
+                    }`}
                 >
                   <Icon size={18} />
                   {item.label}
@@ -1590,14 +1636,14 @@ export default function App() {
                           className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
                         />
                         <div className="relative w-full sm:w-72">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
-                        <input
-                          value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                          placeholder="Buscar imóvel..."
-                          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-slate-400"
-                        />
-                      </div>
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                          <input
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Buscar imóvel..."
+                            className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-slate-400"
+                          />
+                        </div>
                       </div>
                     }
                   />
@@ -1928,20 +1974,20 @@ export default function App() {
                                 return property.status !== "Alugado" && !alreadyHasActiveContract;
                               })
                               .map((property) => (
-                              <option key={property.id} value={property.id}>
-                                {property.nome} - {currency(property.valor_aluguel)}
-                              </option>
-                            ))}
+                                <option key={property.id} value={property.id}>
+                                  {property.nome} - {currency(property.valor_aluguel)}
+                                </option>
+                              ))}
                           </select>
 
                           {properties.filter((property) => {
                             if (editingContractId && property.id === contractForm.propriedade_id) return true;
                             return property.status !== "Alugado" && !contracts.some((contract) => contract.propriedade_id === property.id && contract.status === "Ativo" && contract.id !== editingContractId);
                           }).length === 0 && (
-                            <div className="rounded-2xl bg-amber-50 p-3 text-sm font-medium text-amber-700 md:col-span-6">
-                              Não há imóveis disponíveis para novo contrato. Todos os imóveis estão alugados ou possuem contrato ativo.
-                            </div>
-                          )}
+                              <div className="rounded-2xl bg-amber-50 p-3 text-sm font-medium text-amber-700 md:col-span-6">
+                                Não há imóveis disponíveis para novo contrato. Todos os imóveis estão alugados ou possuem contrato ativo.
+                              </div>
+                            )}
 
                           <select
                             className="rounded-2xl border p-3 text-sm md:col-span-2"
@@ -2101,7 +2147,7 @@ export default function App() {
                                 <Button onClick={() => setPreviewContract(contract)} className="rounded-2xl" size="sm">
                                   Prévia do contrato
                                 </Button>
-                                <Button onClick={() => generateLeaseContractPDF(contract, profile)} className="rounded-2xl" size="sm">
+                                <Button type="button" onClick={() => generateLeaseContractPDF(contract, profile)} className="rounded-2xl" size="sm">
                                   Baixar PDF
                                 </Button>
                                 <Button onClick={() => startEditContract(contract)} variant="outline" className="rounded-2xl" size="sm">
