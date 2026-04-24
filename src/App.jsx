@@ -116,11 +116,14 @@ function sortPayments(paymentsList) {
   });
 }
 
-function generateReceiptPDF(payment) {
+function generateReceiptPDF(payment, profile) {
   const doc = new jsPDF();
   const propertyName = payment.contratos?.propriedades?.nome || "Imóvel não informado";
   const tenantName = payment.contratos?.inquilinos?.nome || "Inquilino não informado";
   const tenantDocument = payment.contratos?.inquilinos?.documento || "Documento não informado";
+  const landlordName = profile?.nome_completo || "Locador não informado";
+  const landlordDocument = profile?.documento || "Documento do locador não informado";
+  const landlordAddress = [profile?.endereco, profile?.cidade, profile?.estado, profile?.cep].filter(Boolean).join(", ");
   const reference = payment.referencia_mes || "Referência não informada";
   const amount = currency(payment.valor_pago || payment.valor);
   const paidDate = formatDateBR(payment.data_pagamento) || formatDateBR(new Date().toISOString().slice(0, 10));
@@ -134,35 +137,39 @@ function generateReceiptPDF(payment) {
   doc.setFontSize(11);
   doc.text(`Recibo Nº: ${String(payment.id || "").slice(0, 8).toUpperCase()}`, 20, 42);
   doc.text(`Data de emissão: ${formatDateBR(new Date().toISOString().slice(0, 10))}`, 20, 50);
+  doc.text(`Locador: ${landlordName}`, 20, 58);
+  doc.text(`CPF/CNPJ do locador: ${landlordDocument}`, 20, 66);
+  if (landlordAddress) doc.text(`Endereço do locador: ${landlordAddress}`, 20, 74);
 
   doc.setDrawColor(180);
-  doc.line(20, 58, 190, 58);
+  doc.line(20, 82, 190, 82);
 
   doc.setFontSize(12);
-  doc.text("Recebi de:", 20, 75);
+  doc.text("Recebi de:", 20, 96);
   doc.setFont("helvetica", "bold");
-  doc.text(tenantName, 50, 75);
+  doc.text(tenantName, 50, 96);
 
   doc.setFont("helvetica", "normal");
-  doc.text(`Documento: ${tenantDocument}`, 20, 85);
-  doc.text(`Imóvel: ${propertyName}`, 20, 95);
-  doc.text(`Referência: ${reference}`, 20, 105);
-  doc.text(`Vencimento: ${dueDate}`, 20, 115);
-  doc.text(`Data de pagamento: ${paidDate}`, 20, 125);
+  doc.text(`Documento: ${tenantDocument}`, 20, 106);
+  doc.text(`Imóvel: ${propertyName}`, 20, 116);
+  doc.text(`Referência: ${reference}`, 20, 126);
+  doc.text(`Vencimento: ${dueDate}`, 20, 136);
+  doc.text(`Data de pagamento: ${paidDate}`, 20, 146);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text(`Valor recebido: ${amount}`, 20, 140);
+  doc.text(`Valor recebido: ${amount}`, 20, 162);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
   const text = `O presente recibo comprova o pagamento do aluguel referente a ${reference}, vinculado ao imóvel ${propertyName}.`;
   const lines = doc.splitTextToSize(text, 170);
-  doc.text(lines, 20, 158);
+  doc.text(lines, 20, 180);
 
   doc.line(55, 220, 155, 220);
   doc.setFontSize(11);
   doc.text("Assinatura do locador / responsável", 105, 228, { align: "center" });
+  doc.text(landlordName, 105, 236, { align: "center" });
 
   doc.setFontSize(9);
   doc.text("Documento gerado pelo sistema Controle de Imóveis.", 105, 280, { align: "center" });
@@ -342,7 +349,7 @@ function generateMonthlyPayments({ userId, contractId, startDate, endDate, dueDa
     if (dueDate >= today) {
       payments.push({
         user_id: userId,
-      contrato_id: contractId,
+        contrato_id: contractId,
         referencia_mes: `${getMonthName(month)}/${year}`,
         data_vencimento: dueDate.toISOString().slice(0, 10),
         valor: Number(amount || 0),
@@ -572,6 +579,8 @@ export default function App() {
     tenant: "Todos",
     search: "",
   });
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [previewContract, setPreviewContract] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -614,6 +623,7 @@ export default function App() {
   });
 
   const [showContractForm, setShowContractForm] = useState(false);
+  const [editingContractId, setEditingContractId] = useState(null);
   const [contractForm, setContractForm] = useState({
     propriedade_id: "",
     inquilino_id: "",
@@ -621,6 +631,10 @@ export default function App() {
     data_fim: "",
     dia_vencimento: "10",
     valor_aluguel: "",
+    multa_atraso: "0",
+    juros_atraso: "0",
+    caucao: "0",
+    observacoes: "",
     status: "Ativo",
   });
 
@@ -746,7 +760,26 @@ export default function App() {
       setProperties(propertiesRes.data || []);
       setTenants(tenantsRes.data || []);
       setContracts(contractsRes.data || []);
-      setPayments(sortPayments(paymentsRes.data || []));
+      const loadedPayments = paymentsRes.data || [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiredPendingPayments = loadedPayments.filter((payment) => {
+        const dueDate = new Date(`${payment.data_vencimento}T00:00:00`);
+        return payment.status === "Pendente" && dueDate < today;
+      });
+
+      if (expiredPendingPayments.length > 0) {
+        await supabase
+          .from("pagamentos")
+          .update({ status: "Atrasado" })
+          .in("id", expiredPendingPayments.map((payment) => payment.id));
+
+        expiredPendingPayments.forEach((expired) => {
+          expired.status = "Atrasado";
+        });
+      }
+
+      setPayments(sortPayments(loadedPayments));
       setExpenses(expensesRes.data || []);
     } catch (err) {
       setError(err?.message || "Erro inesperado ao carregar os dados do Supabase.");
@@ -756,19 +789,33 @@ export default function App() {
   }
 
   const dashboard = useMemo(() => {
+    const [filterYear, filterMonth] = selectedMonth.split("-").map(Number);
+
+    const paymentsInMonth = payments.filter((payment) => {
+      if (!payment.data_vencimento) return false;
+      const date = new Date(`${payment.data_vencimento}T00:00:00`);
+      return date.getFullYear() === filterYear && date.getMonth() + 1 === filterMonth;
+    });
+
+    const expensesInMonth = expenses.filter((expense) => {
+      if (!expense.data_despesa) return false;
+      const date = new Date(`${expense.data_despesa}T00:00:00`);
+      return date.getFullYear() === filterYear && date.getMonth() + 1 === filterMonth;
+    });
+
     const rented = properties.filter((p) => p.status === "Alugado").length;
     const vacant = properties.filter((p) => p.status === "Vago").length;
     const maintenance = properties.filter((p) => p.status === "Manutenção").length;
-    const expected = payments.reduce((sum, p) => sum + Number(p.valor || 0), 0);
-    const received = payments.reduce((sum, p) => sum + Number(p.valor_pago || 0), 0);
-    const overdue = payments
+    const expected = paymentsInMonth.reduce((sum, p) => sum + Number(p.valor || 0), 0);
+    const received = paymentsInMonth.reduce((sum, p) => sum + Number(p.valor_pago || 0), 0);
+    const overdue = paymentsInMonth
       .filter((p) => p.status === "Atrasado")
       .reduce((sum, p) => sum + (Number(p.valor || 0) - Number(p.valor_pago || 0)), 0);
-    const expenseTotal = expenses.reduce((sum, e) => sum + Number(e.valor || 0), 0);
+    const expenseTotal = expensesInMonth.reduce((sum, e) => sum + Number(e.valor || 0), 0);
     const totalRent = properties.reduce((sum, p) => sum + Number(p.valor_aluguel || 0), 0);
     const netProfit = received - expenseTotal;
     return { rented, vacant, maintenance, expected, received, overdue, expenseTotal, totalRent, netProfit };
-  }, [properties, payments, expenses]);
+  }, [properties, payments, expenses, selectedMonth]);
 
   const propertyReports = useMemo(() => {
     return properties.map((property) => {
@@ -1082,20 +1129,20 @@ export default function App() {
       }
 
       setTenantForm({
-      nome: "",
-      telefone: "",
-      documento: "",
-      email: "",
-      rg: "",
-      data_nascimento: "",
-      nacionalidade: "Brasileiro(a)",
-      estado_civil: "",
-      profissao: "",
-      endereco: "",
-      cidade: "",
-      estado: "",
-      cep: "",
-    });
+        nome: "",
+        telefone: "",
+        documento: "",
+        email: "",
+        rg: "",
+        data_nascimento: "",
+        nacionalidade: "Brasileiro(a)",
+        estado_civil: "",
+        profissao: "",
+        endereco: "",
+        cidade: "",
+        estado: "",
+        cep: "",
+      });
       setEditingTenantId(null);
       setShowTenantForm(false);
     } catch (err) {
@@ -1120,6 +1167,43 @@ export default function App() {
     setTenants((prev) => prev.filter((tenant) => tenant.id !== id));
   }
 
+  function resetContractForm() {
+    setContractForm({
+      propriedade_id: "",
+      inquilino_id: "",
+      data_inicio: "",
+      data_fim: "",
+      dia_vencimento: "10",
+      valor_aluguel: "",
+      multa_atraso: "0",
+      juros_atraso: "0",
+      caucao: "0",
+      observacoes: "",
+      status: "Ativo",
+    });
+    setEditingContractId(null);
+  }
+
+  function startEditContract(contract) {
+    setEditingContractId(contract.id);
+    setContractForm({
+      propriedade_id: contract.propriedade_id || "",
+      inquilino_id: contract.inquilino_id || "",
+      data_inicio: contract.data_inicio || "",
+      data_fim: contract.data_fim || "",
+      dia_vencimento: String(contract.dia_vencimento || 10),
+      valor_aluguel: contract.valor_aluguel || "",
+      multa_atraso: contract.multa_atraso || "0",
+      juros_atraso: contract.juros_atraso || "0",
+      caucao: contract.caucao || "0",
+      observacoes: contract.observacoes || "",
+      status: contract.status || "Ativo",
+    });
+    setShowContractForm(true);
+    setError("");
+    setSuccess("");
+  }
+
   async function addContract(e) {
     e.preventDefault();
 
@@ -1140,79 +1224,100 @@ export default function App() {
     try {
       const selectedProperty = properties.find((property) => property.id === contractForm.propriedade_id);
       const alreadyHasActiveContract = contracts.some(
-        (contract) => contract.propriedade_id === contractForm.propriedade_id && contract.status === "Ativo"
+        (contract) =>
+          contract.propriedade_id === contractForm.propriedade_id &&
+          contract.status === "Ativo" &&
+          contract.id !== editingContractId
       );
 
-      if (selectedProperty?.status === "Alugado" || alreadyHasActiveContract) {
+      if (!editingContractId && (selectedProperty?.status === "Alugado" || alreadyHasActiveContract)) {
         setError("Este imóvel já está alugado. Encerre ou exclua o contrato ativo antes de criar outro contrato para ele.");
         return;
       }
+
       const rentValue = Number(contractForm.valor_aluguel || selectedProperty?.valor_aluguel || 0);
+      const payload = {
+        user_id: session.user.id,
+        propriedade_id: contractForm.propriedade_id,
+        inquilino_id: contractForm.inquilino_id,
+        data_inicio: contractForm.data_inicio,
+        data_fim: contractForm.data_fim || null,
+        dia_vencimento: Number(contractForm.dia_vencimento || 10),
+        valor_aluguel: rentValue,
+        multa_atraso: Number(contractForm.multa_atraso || 0),
+        juros_atraso: Number(contractForm.juros_atraso || 0),
+        caucao: Number(contractForm.caucao || 0),
+        observacoes: contractForm.observacoes.trim(),
+        status: contractForm.status,
+      };
 
-      const { data, error: insertError } = await supabase
-        .from("contratos")
-        .insert({
-          user_id: session.user.id,
-          propriedade_id: contractForm.propriedade_id,
-          inquilino_id: contractForm.inquilino_id,
-          data_inicio: contractForm.data_inicio,
-          data_fim: contractForm.data_fim || null,
-          dia_vencimento: Number(contractForm.dia_vencimento || 10),
-          valor_aluguel: rentValue,
-          status: contractForm.status,
-        })
-        .select("*, propriedades(*), inquilinos(*)")
-        .single();
+      if (editingContractId) {
+        const { data, error: updateError } = await supabase
+          .from("contratos")
+          .update(payload)
+          .eq("id", editingContractId)
+          .eq("user_id", session.user.id)
+          .select("*, propriedades(*), inquilinos(*)")
+          .single();
 
-      if (insertError) {
-        setError(insertError.message);
-        return;
-      }
-
-      const generatedPayments = generateMonthlyPayments({
-        userId: session.user.id,
-        contractId: data.id,
-        startDate: contractForm.data_inicio,
-        endDate: contractForm.data_fim,
-        dueDay: contractForm.dia_vencimento,
-        amount: rentValue,
-      });
-
-      if (generatedPayments.length > 0) {
-        const { data: insertedPayments, error: paymentError } = await supabase
-          .from("pagamentos")
-          .insert(generatedPayments)
-          .select("*, contratos(id, propriedades(*), inquilinos(*))");
-
-        if (paymentError) {
-          setError(`Contrato salvo, mas houve erro ao gerar pagamentos: ${paymentError.message}`);
-        } else {
-          setPayments((prev) => sortPayments([...(insertedPayments || []), ...prev]));
+        if (updateError) {
+          setError(updateError.message);
+          return;
         }
+
+        setContracts((prev) => prev.map((contract) => (contract.id === editingContractId ? data : contract)));
+        setSuccess("Contrato atualizado com sucesso.");
+      } else {
+        const { data, error: insertError } = await supabase
+          .from("contratos")
+          .insert(payload)
+          .select("*, propriedades(*), inquilinos(*)")
+          .single();
+
+        if (insertError) {
+          setError(insertError.message);
+          return;
+        }
+
+        const generatedPayments = generateMonthlyPayments({
+          userId: session.user.id,
+          contractId: data.id,
+          startDate: contractForm.data_inicio,
+          endDate: contractForm.data_fim,
+          dueDay: contractForm.dia_vencimento,
+          amount: rentValue,
+        });
+
+        if (generatedPayments.length > 0) {
+          const { data: insertedPayments, error: paymentError } = await supabase
+            .from("pagamentos")
+            .insert(generatedPayments)
+            .select("*, contratos(id, propriedades(*), inquilinos(*))");
+
+          if (paymentError) {
+            setError(`Contrato salvo, mas houve erro ao gerar pagamentos: ${paymentError.message}`);
+          } else {
+            setPayments((prev) => sortPayments([...(insertedPayments || []), ...prev]));
+          }
+        }
+
+        await supabase
+          .from("propriedades")
+          .update({ status: "Alugado" })
+          .eq("id", contractForm.propriedade_id)
+          .eq("user_id", session.user.id);
+
+        setProperties((prev) =>
+          prev.map((property) =>
+            property.id === contractForm.propriedade_id ? { ...property, status: "Alugado" } : property
+          )
+        );
+
+        setContracts((prev) => [data, ...prev]);
+        setSuccess("Contrato cadastrado com sucesso.");
       }
 
-      await supabase
-        .from("propriedades")
-        .update({ status: "Alugado" })
-        .eq("id", contractForm.propriedade_id)
-        .eq("user_id", session.user.id);
-
-      setProperties((prev) =>
-        prev.map((property) =>
-          property.id === contractForm.propriedade_id ? { ...property, status: "Alugado" } : property
-        )
-      );
-
-      setContracts((prev) => [data, ...prev]);
-      setContractForm({
-        propriedade_id: "",
-        inquilino_id: "",
-        data_inicio: "",
-        data_fim: "",
-        dia_vencimento: "10",
-        valor_aluguel: "",
-        status: "Ativo",
-      });
+      resetContractForm();
       setShowContractForm(false);
     } catch (err) {
       setError(err?.message || "Erro inesperado ao cadastrar contrato.");
@@ -1271,8 +1376,39 @@ export default function App() {
     }
   }
 
+  async function endContract(contract) {
+    const confirmation = window.confirm("Deseja encerrar este contrato? O imóvel voltará para Vago e o histórico será mantido.");
+    if (!confirmation) return;
+
+    setError("");
+    setSuccess("");
+
+    const { data, error: updateError } = await supabase
+      .from("contratos")
+      .update({ status: "Encerrado", data_fim: contract.data_fim || new Date().toISOString().slice(0, 10) })
+      .eq("id", contract.id)
+      .eq("user_id", session.user.id)
+      .select("*, propriedades(*), inquilinos(*)")
+      .single();
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    await supabase
+      .from("propriedades")
+      .update({ status: "Vago" })
+      .eq("id", contract.propriedade_id)
+      .eq("user_id", session.user.id);
+
+    setContracts((prev) => prev.map((item) => (item.id === contract.id ? data : item)));
+    setProperties((prev) => prev.map((property) => property.id === contract.propriedade_id ? { ...property, status: "Vago" } : property));
+    setSuccess("Contrato encerrado com sucesso. O histórico foi mantido.");
+  }
+
   async function deleteContract(id) {
-    const confirmation = window.confirm("Deseja realmente excluir este contrato?");
+    const confirmation = window.confirm("Deseja realmente excluir este contrato? Use Encerrar contrato se quiser manter o histórico.");
     if (!confirmation) return;
 
     setError("");
@@ -1494,11 +1630,10 @@ export default function App() {
                     setActive(item.id);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
-                    active === item.id
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${active === item.id
                       ? "bg-slate-900 text-white shadow-sm"
                       : "text-slate-600 hover:bg-slate-100"
-                  }`}
+                    }`}
                 >
                   <Icon size={18} />
                   {item.label}
@@ -1591,16 +1726,28 @@ export default function App() {
                 <section>
                   <SectionHeader
                     title="Visão geral"
-                    description="Resumo financeiro e operacional conectado ao banco de dados."
+                    description={`Resumo financeiro e operacional filtrado por ${selectedMonth}.`}
                     action={
-                      <div className="relative w-full sm:w-72">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                         <input
-                          value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                          placeholder="Buscar imóvel..."
-                          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-slate-400"
+                          type="month"
+                          value={selectedMonth}
+                          onChange={(e) => setSelectedMonth(e.target.value)}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-400"
                         />
+
+                        <div className="relative w-full sm:w-72">
+                          <Search
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                            size={17}
+                          />
+                          <input
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="Buscar imóvel..."
+                            className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-slate-400"
+                          />
+                        </div>
                       </div>
                     }
                   />
@@ -1726,6 +1873,22 @@ export default function App() {
                               <strong>{currency(property.valor_aluguel)}</strong>
                             </div>
                             {property.observacoes && <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">{property.observacoes}</p>}
+                            <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">
+                              <p className="mb-2 font-semibold text-slate-800">Histórico do imóvel</p>
+                              {contracts.filter((contract) => contract.propriedade_id === property.id).length === 0 ? (
+                                <p className="text-xs text-slate-500">Nenhum contrato registrado.</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {contracts
+                                    .filter((contract) => contract.propriedade_id === property.id)
+                                    .map((contract) => (
+                                      <p key={contract.id} className="text-xs">
+                                        {contract.inquilinos?.nome || "Inquilino"} • {contract.status} • {formatDateBR(contract.data_inicio)} até {contract.data_fim ? formatDateBR(contract.data_fim) : "atual"}
+                                      </p>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
                             <Button onClick={() => startEditProperty(property)} variant="outline" className="mt-4 w-full rounded-2xl">
                               Editar imóvel
                             </Button>
@@ -1907,10 +2070,10 @@ export default function App() {
                                 return property.status !== "Alugado" && !alreadyHasActiveContract;
                               })
                               .map((property) => (
-                              <option key={property.id} value={property.id}>
-                                {property.nome} - {currency(property.valor_aluguel)}
-                              </option>
-                            ))}
+                                <option key={property.id} value={property.id}>
+                                  {property.nome} - {currency(property.valor_aluguel)}
+                                </option>
+                              ))}
                           </select>
 
                           {properties.filter((property) => property.status !== "Alugado" && !contracts.some((contract) => contract.propriedade_id === property.id && contract.status === "Ativo")).length === 0 && (
@@ -1950,6 +2113,33 @@ export default function App() {
                             onChange={(e) => setContractForm({ ...contractForm, dia_vencimento: e.target.value })}
                           />
 
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Multa por atraso"
+                            className="rounded-2xl border p-3 text-sm"
+                            value={contractForm.multa_atraso}
+                            onChange={(e) => setContractForm({ ...contractForm, multa_atraso: e.target.value })}
+                          />
+
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Juros por atraso"
+                            className="rounded-2xl border p-3 text-sm"
+                            value={contractForm.juros_atraso}
+                            onChange={(e) => setContractForm({ ...contractForm, juros_atraso: e.target.value })}
+                          />
+
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Caução"
+                            className="rounded-2xl border p-3 text-sm"
+                            value={contractForm.caucao}
+                            onChange={(e) => setContractForm({ ...contractForm, caucao: e.target.value })}
+                          />
+
                           <div className="md:col-span-2">
                             <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Data de início</label>
                             <input
@@ -1980,7 +2170,26 @@ export default function App() {
                             <option>Suspenso</option>
                           </select>
 
-                          <Button disabled={saving} className="rounded-2xl md:col-span-6">
+                          <textarea
+                            placeholder="Cláusulas adicionais ou observações do contrato"
+                            className="min-h-28 rounded-2xl border p-3 text-sm md:col-span-6"
+                            value={contractForm.observacoes}
+                            onChange={(e) => setContractForm({ ...contractForm, observacoes: e.target.value })}
+                          />
+
+                          <div className="flex gap-2 md:col-span-6">
+                            <Button disabled={saving} className="flex-1 rounded-2xl">
+                              {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
+                              {editingContractId ? "Atualizar contrato" : "Salvar contrato"}
+                            </Button>
+                            {editingContractId && (
+                              <Button type="button" onClick={() => { resetContractForm(); setShowContractForm(false); }} variant="outline" className="rounded-2xl">
+                                Cancelar
+                              </Button>
+                            )}
+                          </div>
+
+                          <Button disabled={saving} className="hidden rounded-2xl md:col-span-6">
                             {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
                             Salvar contrato
                           </Button>
@@ -2008,13 +2217,25 @@ export default function App() {
                                 <p className="text-sm text-slate-500">Início: {contract.data_inicio} • Fim: {contract.data_fim || "12 meses automáticos"}</p>
                                 <p className="text-sm text-slate-500">Vencimento todo dia {contract.dia_vencimento}</p>
                                 <p className="mt-1 text-xs font-medium text-emerald-700">Pagamentos mensais gerados automaticamente.</p>
+                                {contract.observacoes && <p className="mt-2 rounded-2xl bg-slate-50 p-3 text-xs text-slate-600">Cláusulas adicionais: {contract.observacoes}</p>}
                               </div>
                               <div className="flex flex-col items-start gap-2 md:items-end">
                                 <p className="text-xl font-bold">{currency(contract.valor_aluguel)}</p>
                                 <Badge>{contract.status}</Badge>
-                                <Button onClick={() => generateLeaseContractPDF(contract, profile)} className="rounded-2xl" size="sm">
-                                  Gerar contrato PDF
+                                <Button onClick={() => setPreviewContract(contract)} className="rounded-2xl" size="sm">
+                                  Prévia do contrato
                                 </Button>
+                                <Button onClick={() => generateLeaseContractPDF(contract, profile)} className="rounded-2xl" size="sm">
+                                  Baixar PDF
+                                </Button>
+                                <Button onClick={() => startEditContract(contract)} variant="outline" className="rounded-2xl" size="sm">
+                                  Editar contrato
+                                </Button>
+                                {contract.status === "Ativo" && (
+                                  <Button onClick={() => endContract(contract)} variant="outline" className="rounded-2xl" size="sm">
+                                    Encerrar contrato
+                                  </Button>
+                                )}
                                 <Button onClick={() => generatePaymentsForContract(contract)} variant="outline" className="rounded-2xl" size="sm">
                                   Gerar/Atualizar cobranças
                                 </Button>
@@ -2116,7 +2337,7 @@ export default function App() {
                                 </div>
                               ) : (
                                 <div className="mt-1 flex flex-col gap-2 sm:flex-row">
-                                  <Button onClick={() => generateReceiptPDF(payment)} className="rounded-2xl" size="sm">Gerar recibo PDF</Button>
+                                  <Button onClick={() => generateReceiptPDF(payment, profile)} className="rounded-2xl" size="sm">Gerar recibo PDF</Button>
                                   <Button onClick={() => unmarkPaymentAsPaid(payment)} variant="outline" className="rounded-2xl text-red-600 hover:text-red-700" size="sm">Desmarcar pagamento</Button>
                                 </div>
                               )}
@@ -2226,6 +2447,39 @@ export default function App() {
                     </div>
                   )}
                 </section>
+              )}
+
+              {previewContract && (
+                <Card className="mb-6 rounded-3xl border-slate-300 bg-white shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold">Prévia do contrato</h3>
+                        <p className="text-sm text-slate-500">Revise os principais dados antes de baixar o PDF.</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={() => generateLeaseContractPDF(previewContract, profile)} className="rounded-2xl" size="sm">Baixar PDF</Button>
+                        <Button onClick={() => setPreviewContract(null)} variant="outline" className="rounded-2xl" size="sm">Fechar</Button>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 text-sm md:grid-cols-2">
+                      <p><strong>Locador:</strong> {profile?.nome_completo || "Preencha o perfil"}</p>
+                      <p><strong>Locatário:</strong> {previewContract.inquilinos?.nome || "Não informado"}</p>
+                      <p><strong>Imóvel:</strong> {previewContract.propriedades?.nome || "Não informado"}</p>
+                      <p><strong>Aluguel:</strong> {currency(previewContract.valor_aluguel)}</p>
+                      <p><strong>Início:</strong> {formatDateBR(previewContract.data_inicio)}</p>
+                      <p><strong>Fim:</strong> {previewContract.data_fim ? formatDateBR(previewContract.data_fim) : "Prazo indeterminado"}</p>
+                      <p><strong>Vencimento:</strong> Dia {previewContract.dia_vencimento}</p>
+                      <p><strong>Status:</strong> {previewContract.status}</p>
+                    </div>
+                    {previewContract.observacoes && (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                        <strong>Cláusulas adicionais:</strong>
+                        <p className="mt-1 whitespace-pre-wrap">{previewContract.observacoes}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               )}
 
               {active === "reports" && (
