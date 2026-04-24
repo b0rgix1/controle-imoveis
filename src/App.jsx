@@ -319,55 +319,90 @@ function LoginScreen() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <Card className="w-full max-w-md rounded-3xl shadow-sm">
-        <CardContent className="p-8">
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
-              <Home size={28} />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900">Controle de Imóveis</h1>
-            <p className="mt-1 text-sm text-slate-500">Acesse sua conta para gerenciar seus aluguéis.</p>
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.28),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_35%)]" />
+      <div className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-[1.1fr_0.9fr]">
+        <section>
+          <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200 backdrop-blur">
+            <Building2 size={16} /> Sistema online para gestão de aluguéis
           </div>
+          <h1 className="max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
+            Controle de Imóveis com gestão completa de contratos, pagamentos e despesas.
+          </h1>
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
+            Organize imóveis, inquilinos, contratos, cobranças mensais, recibos e relatórios financeiros em um único painel profissional.
+          </p>
 
-          <form onSubmit={handleAuth} className="space-y-3">
-            <input
-              type="email"
-              placeholder="E-mail"
-              className="w-full rounded-2xl border p-3 text-sm outline-none focus:border-slate-400"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <input
-              type="password"
-              placeholder="Senha"
-              className="w-full rounded-2xl border p-3 text-sm outline-none focus:border-slate-400"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+              <Wallet className="mb-3 text-emerald-300" size={26} />
+              <h3 className="font-bold">Pagamentos</h3>
+              <p className="mt-1 text-sm text-slate-300">Controle de recebidos, pendentes e atrasados.</p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+              <FileText className="mb-3 text-blue-300" size={26} />
+              <h3 className="font-bold">Contratos</h3>
+              <p className="mt-1 text-sm text-slate-300">Vínculo entre imóvel, inquilino e vencimentos.</p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+              <TrendingUp className="mb-3 text-amber-300" size={26} />
+              <h3 className="font-bold">Relatórios</h3>
+              <p className="mt-1 text-sm text-slate-300">Lucro real, despesas e inadimplência.</p>
+            </div>
+          </div>
+        </section>
 
-            {message && (
-              <div className="rounded-2xl bg-slate-100 p-3 text-sm text-slate-700">{message}</div>
-            )}
+        <Card className="rounded-[2rem] border-white/10 bg-white text-slate-900 shadow-2xl">
+          <CardContent className="p-8">
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                <Home size={28} />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">Controle de Imóveis</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {mode === "login" ? "Entre para acessar sua gestão." : "Crie sua conta para começar."}
+              </p>
+            </div>
 
-            <Button disabled={loadingAuth} className="w-full rounded-2xl">
-              {loadingAuth ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
-              {mode === "login" ? "Entrar" : "Criar conta"}
-            </Button>
-          </form>
+            <form onSubmit={handleAuth} className="space-y-3">
+              <input
+                type="email"
+                placeholder="E-mail"
+                className="w-full rounded-2xl border p-3 text-sm outline-none focus:border-slate-400"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Senha"
+                className="w-full rounded-2xl border p-3 text-sm outline-none focus:border-slate-400"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
 
-          <button
-            type="button"
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-            className="mt-4 w-full text-sm font-medium text-slate-600 hover:text-slate-900"
-          >
-            {mode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}
-          </button>
-        </CardContent>
-      </Card>
+              {message && (
+                <div className="rounded-2xl bg-slate-100 p-3 text-sm text-slate-700">{message}</div>
+              )}
+
+              <Button disabled={loadingAuth} className="w-full rounded-2xl bg-slate-900 hover:bg-slate-800">
+                {loadingAuth ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
+                {mode === "login" ? "Entrar" : "Criar conta"}
+              </Button>
+            </form>
+
+            <button
+              type="button"
+              onClick={() => setMode(mode === "login" ? "register" : "login")}
+              className="mt-4 w-full text-sm font-medium text-slate-600 hover:text-slate-900"
+            >
+              {mode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}
+            </button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -376,6 +411,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [active, setActive] = useState("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [paymentFilters, setPaymentFilters] = useState({
     status: "Todos",
@@ -1022,21 +1058,24 @@ export default function App() {
               Sair
             </Button>
           </div>
-          <Button variant="outline" className="rounded-2xl sm:hidden">
+          <Button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} variant="outline" className="rounded-2xl sm:hidden">
             <Menu size={18} />
           </Button>
         </div>
       </header>
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[260px_1fr]">
-        <aside className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:h-fit">
+        <aside className={`${mobileMenuOpen ? "block" : "hidden"} rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:block lg:sticky lg:top-24 lg:h-fit`}>
           <nav className="grid gap-1 sm:grid-cols-3 lg:grid-cols-1">
             {nav.map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActive(item.id)}
+                  onClick={() => {
+                    setActive(item.id);
+                    setMobileMenuOpen(false);
+                  }}
                   className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
                     active === item.id
                       ? "bg-slate-900 text-white shadow-sm"
@@ -1049,6 +1088,11 @@ export default function App() {
               );
             })}
           </nav>
+          <div className="mt-3 border-t border-slate-100 pt-3 sm:hidden lg:block">
+            <Button onClick={signOut} variant="outline" className="w-full rounded-2xl text-red-600 hover:text-red-700">
+              Sair da conta
+            </Button>
+          </div>
         </aside>
 
         <main>
