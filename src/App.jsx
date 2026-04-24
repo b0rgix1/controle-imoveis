@@ -454,6 +454,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
 
   const [showPropertyForm, setShowPropertyForm] = useState(false);
+  const [editingPropertyId, setEditingPropertyId] = useState(null);
   const [propertyForm, setPropertyForm] = useState({
     nome: "",
     endereco: "",
@@ -723,6 +724,34 @@ export default function App() {
     }
   }
 
+  function startEditProperty(property) {
+    setEditingPropertyId(property.id);
+    setPropertyForm({
+      nome: property.nome || "",
+      endereco: property.endereco || "",
+      tipo: property.tipo || "Casa",
+      status: property.status || "Vago",
+      valor_aluguel: property.valor_aluguel || "",
+      observacoes: property.observacoes || "",
+    });
+    setShowPropertyForm(true);
+    setError("");
+    setSuccess("");
+  }
+
+  function cancelPropertyEdit() {
+    setEditingPropertyId(null);
+    setPropertyForm({
+      nome: "",
+      endereco: "",
+      tipo: "Casa",
+      status: "Vago",
+      valor_aluguel: "",
+      observacoes: "",
+    });
+    setShowPropertyForm(false);
+  }
+
   async function addProperty(e) {
     e.preventDefault();
 
@@ -741,30 +770,53 @@ export default function App() {
     setSuccess("");
 
     try {
-      const { data, error: insertError } = await supabase
-        .from("propriedades")
-        .insert({
-          user_id: session.user.id,
-          nome: propertyForm.nome.trim(),
-          endereco: propertyForm.endereco.trim(),
-          tipo: propertyForm.tipo,
-          status: propertyForm.status,
-          valor_aluguel: Number(propertyForm.valor_aluguel || 0),
-          observacoes: propertyForm.observacoes.trim(),
-        })
-        .select()
-        .single();
+      const payload = {
+        user_id: session.user.id,
+        nome: propertyForm.nome.trim(),
+        endereco: propertyForm.endereco.trim(),
+        tipo: propertyForm.tipo,
+        status: propertyForm.status,
+        valor_aluguel: Number(propertyForm.valor_aluguel || 0),
+        observacoes: propertyForm.observacoes.trim(),
+      };
 
-      if (insertError) {
-        setError(insertError.message);
-        return;
+      if (editingPropertyId) {
+        const { data, error: updateError } = await supabase
+          .from("propriedades")
+          .update(payload)
+          .eq("id", editingPropertyId)
+          .eq("user_id", session.user.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          setError(updateError.message);
+          return;
+        }
+
+        setProperties((prev) => prev.map((property) => (property.id === editingPropertyId ? data : property)));
+        setSuccess("Imóvel atualizado com sucesso.");
+      } else {
+        const { data, error: insertError } = await supabase
+          .from("propriedades")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (insertError) {
+          setError(insertError.message);
+          return;
+        }
+
+        setProperties((prev) => [data, ...prev]);
+        setSuccess("Imóvel cadastrado com sucesso.");
       }
 
-      setProperties((prev) => [data, ...prev]);
       setPropertyForm({ nome: "", endereco: "", tipo: "Casa", status: "Vago", valor_aluguel: "", observacoes: "" });
+      setEditingPropertyId(null);
       setShowPropertyForm(false);
     } catch (err) {
-      setError(err?.message || "Erro inesperado ao cadastrar imóvel.");
+      setError(err?.message || "Erro inesperado ao salvar imóvel.");
     } finally {
       setSaving(false);
     }
@@ -1419,7 +1471,11 @@ export default function App() {
                   <SectionHeader
                     title="Imóveis"
                     description="Cadastre, acompanhe e exclua imóveis salvos diretamente no Supabase."
-                    action={<Button onClick={() => setShowPropertyForm(!showPropertyForm)} className="rounded-2xl"><Plus className="mr-2" size={16} /> Novo imóvel</Button>}
+                    action={<Button onClick={() => {
+                      setEditingPropertyId(null);
+                      setPropertyForm({ nome: "", endereco: "", tipo: "Casa", status: "Vago", valor_aluguel: "", observacoes: "" });
+                      setShowPropertyForm(!showPropertyForm);
+                    }} className="rounded-2xl"><Plus className="mr-2" size={16} /> Novo imóvel</Button>}
                   />
 
                   {showPropertyForm && (
@@ -1441,10 +1497,17 @@ export default function App() {
                             <option>Manutenção</option>
                           </select>
                           <input placeholder="Observações" className="rounded-2xl border p-3 text-sm md:col-span-3" value={propertyForm.observacoes} onChange={(e) => setPropertyForm({ ...propertyForm, observacoes: e.target.value })} />
-                          <Button disabled={saving} className="rounded-2xl md:col-span-1">
-                            {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
-                            Salvar
-                          </Button>
+                          <div className="flex gap-2 md:col-span-1">
+                            <Button disabled={saving} className="flex-1 rounded-2xl">
+                              {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
+                              {editingPropertyId ? "Atualizar" : "Salvar"}
+                            </Button>
+                            {editingPropertyId && (
+                              <Button type="button" onClick={cancelPropertyEdit} variant="outline" className="rounded-2xl">
+                                Cancelar
+                              </Button>
+                            )}
+                          </div>
                         </form>
                       </CardContent>
                     </Card>
@@ -1468,6 +1531,9 @@ export default function App() {
                               <strong>{currency(property.valor_aluguel)}</strong>
                             </div>
                             {property.observacoes && <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">{property.observacoes}</p>}
+                            <Button onClick={() => startEditProperty(property)} variant="outline" className="mt-4 w-full rounded-2xl">
+                              Editar imóvel
+                            </Button>
                             <Button onClick={() => deleteProperty(property.id)} variant="outline" className="mt-4 w-full rounded-2xl text-red-600 hover:text-red-700">
                               <Trash2 className="mr-2" size={16} /> Excluir imóvel
                             </Button>
