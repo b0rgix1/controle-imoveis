@@ -116,196 +116,24 @@ function sortPayments(paymentsList) {
   });
 }
 
-function generateReceiptPDF(payment, profile) {
-  const doc = new jsPDF();
-  const propertyName = payment.contratos?.propriedades?.nome || "Imóvel não informado";
-  const tenantName = payment.contratos?.inquilinos?.nome || "Inquilino não informado";
-  const tenantDocument = payment.contratos?.inquilinos?.documento || "Documento não informado";
-  const landlordName = profile?.nome_completo || "Locador não informado";
-  const landlordDocument = profile?.documento || "Documento do locador não informado";
-  const landlordAddress = [profile?.endereco, profile?.cidade, profile?.estado, profile?.cep].filter(Boolean).join(", ");
-  const reference = payment.referencia_mes || "Referência não informada";
-  const amount = currency(payment.valor_pago || payment.valor);
-  const paidDate = formatDateBR(payment.data_pagamento) || formatDateBR(new Date().toISOString().slice(0, 10));
-  const dueDate = formatDateBR(payment.data_vencimento);
+function sortContracts(contractsList) {
+  const priority = {
+    Ativo: 1,
+    Suspenso: 2,
+    Encerrado: 3,
+  };
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("RECIBO DE PAGAMENTO DE ALUGUEL", 105, 25, { align: "center" });
+  return [...contractsList].sort((a, b) => {
+    const priorityA = priority[a.status] || 99;
+    const priorityB = priority[b.status] || 99;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(`Recibo Nº: ${String(payment.id || "").slice(0, 8).toUpperCase()}`, 20, 42);
-  doc.text(`Data de emissão: ${formatDateBR(new Date().toISOString().slice(0, 10))}`, 20, 50);
-  doc.text(`Locador: ${landlordName}`, 20, 58);
-  doc.text(`CPF/CNPJ do locador: ${landlordDocument}`, 20, 66);
-  if (landlordAddress) doc.text(`Endereço do locador: ${landlordAddress}`, 20, 74);
+    if (priorityA !== priorityB) return priorityA - priorityB;
 
-  doc.setDrawColor(180);
-  doc.line(20, 82, 190, 82);
+    const dateA = new Date(`${a.data_inicio || "2999-12-31"}T00:00:00`).getTime();
+    const dateB = new Date(`${b.data_inicio || "2999-12-31"}T00:00:00`).getTime();
 
-  doc.setFontSize(12);
-  doc.text("Recebi de:", 20, 96);
-  doc.setFont("helvetica", "bold");
-  doc.text(tenantName, 50, 96);
-
-  doc.setFont("helvetica", "normal");
-  doc.text(`Documento: ${tenantDocument}`, 20, 106);
-  doc.text(`Imóvel: ${propertyName}`, 20, 116);
-  doc.text(`Referência: ${reference}`, 20, 126);
-  doc.text(`Vencimento: ${dueDate}`, 20, 136);
-  doc.text(`Data de pagamento: ${paidDate}`, 20, 146);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(`Valor recebido: ${amount}`, 20, 162);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
-  const text = `O presente recibo comprova o pagamento do aluguel referente a ${reference}, vinculado ao imóvel ${propertyName}.`;
-  const lines = doc.splitTextToSize(text, 170);
-  doc.text(lines, 20, 180);
-
-  doc.line(55, 220, 155, 220);
-  doc.setFontSize(11);
-  doc.text("Assinatura do locador / responsável", 105, 228, { align: "center" });
-  doc.text(landlordName, 105, 236, { align: "center" });
-
-  doc.setFontSize(9);
-  doc.text("Documento gerado pelo sistema Controle de Imóveis.", 105, 280, { align: "center" });
-
-  doc.save(`recibo-${tenantName.replaceAll(" ", "-").toLowerCase()}-${reference.replace("/", "-")}.pdf`);
-}
-
-function addContractText(doc, text, x, y, maxWidth = 170, lineHeight = 6) {
-  const lines = doc.splitTextToSize(text, maxWidth);
-  doc.text(lines, x, y);
-  return y + lines.length * lineHeight;
-}
-
-function ensureContractPageSpace(doc, y, needed = 30) {
-  if (y + needed > 275) {
-    doc.addPage();
-    return 25;
-  }
-  return y;
-}
-
-function generateLeaseContractPDF(contract, profile) {
-  if (!profile?.nome_completo) {
-    alert("Preencha a aba Perfil antes de gerar o contrato.");
-    return;
-  }
-
-  const property = contract.propriedades || {};
-  const tenant = contract.inquilinos || {};
-  const doc = new jsPDF();
-  let y = 22;
-
-  const landlordAddress = [profile.endereco, profile.cidade, profile.estado, profile.cep].filter(Boolean).join(", ");
-  const tenantAddress = [tenant.endereco, tenant.cidade, tenant.estado, tenant.cep].filter(Boolean).join(", ");
-  const propertyAddress = [property.endereco, property.bairro, property.cidade, property.estado, property.cep].filter(Boolean).join(", ");
-  const rentValue = currency(contract.valor_aluguel);
-  const lateFine = currency(contract.multa_atraso || 0);
-  const lateInterest = currency(contract.juros_atraso || 0);
-  const deposit = currency(contract.caucao || 0);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.text("CONTRATO PARTICULAR DE LOCAÇÃO DE IMÓVEL", 105, y, { align: "center" });
-  y += 12;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-
-  y = addContractText(doc, `Pelo presente instrumento particular, de um lado, como LOCADOR(A), ${profile.nome_completo || "não informado"}, inscrito(a) no CPF/CNPJ sob nº ${profile.documento || "não informado"}, RG nº ${profile.rg || "não informado"}, ${profile.nacionalidade || ""}, ${profile.estado_civil || ""}, ${profile.profissao || ""}, residente e domiciliado(a) em ${landlordAddress || "endereço não informado"}; e, de outro lado, como LOCATÁRIO(A), ${tenant.nome || "não informado"}, inscrito(a) no CPF/CNPJ sob nº ${tenant.documento || "não informado"}, RG nº ${tenant.rg || "não informado"}, ${tenant.nacionalidade || ""}, ${tenant.estado_civil || ""}, ${tenant.profissao || ""}, residente e domiciliado(a) em ${tenantAddress || "endereço não informado"}, têm entre si justo e contratado o presente Contrato de Locação de Imóvel, mediante as cláusulas e condições seguintes:`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 35);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 1ª - DO IMÓVEL", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, `O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado ${property.nome || "não informado"}, situado em ${propertyAddress || property.endereco || "endereço não informado"}, do tipo ${property.tipo || "não informado"}, com a seguinte descrição: ${property.descricao || property.observacoes || "sem descrição adicional"}.`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 35);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 2ª - DO PRAZO", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, `O prazo da locação inicia-se em ${formatDateBR(contract.data_inicio)} e termina em ${contract.data_fim ? formatDateBR(contract.data_fim) : "prazo indeterminado"}, podendo ser renovado mediante acordo entre as partes.`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 3ª - DO ALUGUEL E VENCIMENTO", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, `O aluguel mensal será de ${rentValue}, com vencimento todo dia ${contract.dia_vencimento} de cada mês, devendo ser pago pelo LOCATÁRIO ao LOCADOR na forma acordada entre as partes.`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 4ª - DA MULTA, JUROS E ENCARGOS", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, `Em caso de atraso no pagamento, incidirá multa de ${lateFine} e juros de ${lateInterest}, sem prejuízo de outros encargos eventualmente pactuados. O LOCATÁRIO também se responsabiliza por despesas ordinárias vinculadas ao uso do imóvel, quando aplicável, tais como água, energia, condomínio e demais encargos de consumo.`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 35);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 5ª - DA CAUÇÃO", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, `Fica ajustada caução no valor de ${deposit}. A devolução da caução, quando cabível, dependerá da entrega do imóvel nas condições pactuadas e da inexistência de débitos pendentes.`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 6ª - DAS OBRIGAÇÕES DO LOCATÁRIO", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, "O LOCATÁRIO obriga-se a conservar o imóvel, utilizá-lo exclusivamente para a finalidade contratada, não realizar modificações sem autorização prévia do LOCADOR, pagar pontualmente os valores devidos e devolver o imóvel ao final da locação em bom estado de conservação, ressalvado o desgaste natural pelo uso regular.", 20, y);
-
-  y = ensureContractPageSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 7ª - DAS OBRIGAÇÕES DO LOCADOR", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, "O LOCADOR obriga-se a entregar o imóvel em condições de uso, respeitar a posse direta do LOCATÁRIO durante a vigência do contrato e cumprir as obrigações legais aplicáveis à locação.", 20, y);
-
-  y = ensureContractPageSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 8ª - DA RESCISÃO", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, "O descumprimento de qualquer obrigação contratual poderá ensejar a rescisão do presente contrato, sem prejuízo da cobrança dos valores devidos, multas, perdas e danos, conforme a legislação aplicável.", 20, y);
-
-  y = ensureContractPageSpace(doc, y, 40);
-  doc.setFont("helvetica", "bold");
-  doc.text("CLÁUSULA 9ª - DO FORO", 20, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  y = addContractText(doc, `Fica eleito o foro da comarca de ${profile.cidade || tenant.cidade || "cidade não informada"}/${profile.estado || tenant.estado || "UF"} para dirimir eventuais controvérsias decorrentes deste contrato, salvo disposição legal em contrário.`, 20, y);
-
-  y = ensureContractPageSpace(doc, y, 70);
-  y += 8;
-  y = addContractText(doc, `E por estarem justas e contratadas, as partes assinam o presente instrumento em duas vias de igual teor e forma.`, 20, y);
-  y += 12;
-  doc.text(`${profile.cidade || "Cidade"}/${profile.estado || "UF"}, ${formatDateBR(new Date().toISOString().slice(0, 10))}.`, 20, y);
-
-  y += 30;
-  doc.line(25, y, 90, y);
-  doc.line(120, y, 185, y);
-  y += 6;
-  doc.setFontSize(10);
-  doc.text("LOCADOR(A)", 57, y, { align: "center" });
-  doc.text("LOCATÁRIO(A)", 152, y, { align: "center" });
-  y += 6;
-  doc.text(profile.nome_completo || "", 57, y, { align: "center" });
-  doc.text(tenant.nome || "", 152, y, { align: "center" });
-
-  doc.setFontSize(8);
-  doc.text("Documento gerado pelo sistema Controle de Imóveis. Recomenda-se revisão jurídica antes da assinatura.", 105, 288, { align: "center" });
-
-  const filenameTenant = (tenant.nome || "inquilino").replaceAll(" ", "-").toLowerCase();
-  const filenameProperty = (property.nome || "imovel").replaceAll(" ", "-").toLowerCase();
-  doc.save(`contrato-${filenameTenant}-${filenameProperty}.pdf`);
+    return dateB - dateA;
+  });
 }
 
 function getMonthName(monthIndex) {
@@ -759,7 +587,7 @@ export default function App() {
 
       setProperties(propertiesRes.data || []);
       setTenants(tenantsRes.data || []);
-      setContracts(contractsRes.data || []);
+      setContracts(sortContracts(contractsRes.data || []));
       const loadedPayments = paymentsRes.data || [];
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -1265,7 +1093,7 @@ export default function App() {
           return;
         }
 
-        setContracts((prev) => prev.map((contract) => (contract.id === editingContractId ? data : contract)));
+        setContracts((prev) => sortContracts(prev.map((contract) => (contract.id === editingContractId ? data : contract))));
         setSuccess("Contrato atualizado com sucesso.");
       } else {
         const { data, error: insertError } = await supabase
@@ -1313,7 +1141,7 @@ export default function App() {
           )
         );
 
-        setContracts((prev) => [data, ...prev]);
+        setContracts((prev) => sortContracts([data, ...prev]));
         setSuccess("Contrato cadastrado com sucesso.");
       }
 
@@ -1402,7 +1230,7 @@ export default function App() {
       .eq("id", contract.propriedade_id)
       .eq("user_id", session.user.id);
 
-    setContracts((prev) => prev.map((item) => (item.id === contract.id ? data : item)));
+    setContracts((prev) => sortContracts(prev.map((item) => (item.id === contract.id ? data : item))));
     setProperties((prev) => prev.map((property) => property.id === contract.propriedade_id ? { ...property, status: "Vago" } : property));
     setSuccess("Contrato encerrado com sucesso. O histórico foi mantido.");
   }
@@ -2103,50 +1931,65 @@ export default function App() {
                             ))}
                           </select>
 
-                          <input
-                            type="number"
-                            placeholder="Valor do aluguel"
-                            className="rounded-2xl border p-3 text-sm"
-                            value={contractForm.valor_aluguel}
-                            onChange={(e) => setContractForm({ ...contractForm, valor_aluguel: e.target.value })}
-                          />
+                          <div>
+                            <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Valor do aluguel</label>
+                            <input
+                              type="number"
+                              placeholder="Ex: 1500"
+                              className="w-full rounded-2xl border p-3 text-sm"
+                              value={contractForm.valor_aluguel}
+                              onChange={(e) => setContractForm({ ...contractForm, valor_aluguel: e.target.value })}
+                            />
+                          </div>
 
-                          <input
-                            type="number"
-                            min="1"
-                            max="31"
-                            placeholder="Dia venc."
-                            className="rounded-2xl border p-3 text-sm"
-                            value={contractForm.dia_vencimento}
-                            onChange={(e) => setContractForm({ ...contractForm, dia_vencimento: e.target.value })}
-                          />
+                          <div>
+                            <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Dia do vencimento</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              placeholder="Ex: 10"
+                              className="w-full rounded-2xl border p-3 text-sm"
+                              value={contractForm.dia_vencimento}
+                              onChange={(e) => setContractForm({ ...contractForm, dia_vencimento: e.target.value })}
+                            />
+                          </div>
 
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Multa por atraso"
-                            className="rounded-2xl border p-3 text-sm"
-                            value={contractForm.multa_atraso}
-                            onChange={(e) => setContractForm({ ...contractForm, multa_atraso: e.target.value })}
-                          />
+                          <div>
+                            <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Multa por atraso</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="Ex: 50"
+                              className="w-full rounded-2xl border p-3 text-sm"
+                              value={contractForm.multa_atraso}
+                              onChange={(e) => setContractForm({ ...contractForm, multa_atraso: e.target.value })}
+                            />
+                          </div>
 
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Juros por atraso"
-                            className="rounded-2xl border p-3 text-sm"
-                            value={contractForm.juros_atraso}
-                            onChange={(e) => setContractForm({ ...contractForm, juros_atraso: e.target.value })}
-                          />
+                          <div>
+                            <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Juros por atraso</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="Ex: 2"
+                              className="w-full rounded-2xl border p-3 text-sm"
+                              value={contractForm.juros_atraso}
+                              onChange={(e) => setContractForm({ ...contractForm, juros_atraso: e.target.value })}
+                            />
+                          </div>
 
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Caução"
-                            className="rounded-2xl border p-3 text-sm"
-                            value={contractForm.caucao}
-                            onChange={(e) => setContractForm({ ...contractForm, caucao: e.target.value })}
-                          />
+                          <div>
+                            <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Caução</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              placeholder="Ex: 1500"
+                              className="w-full rounded-2xl border p-3 text-sm"
+                              value={contractForm.caucao}
+                              onChange={(e) => setContractForm({ ...contractForm, caucao: e.target.value })}
+                            />
+                          </div>
 
                           <div className="md:col-span-2">
                             <label className="mb-1 block px-1 text-xs font-medium text-slate-500">Data de início</label>
