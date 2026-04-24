@@ -19,6 +19,7 @@ import {
   Loader2,
   Trash2,
   PieChart,
+  UserCog,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -444,6 +445,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [profile, setProfile] = useState(null);
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [contracts, setContracts] = useState([]);
@@ -488,6 +490,22 @@ export default function App() {
     valor: "",
   });
 
+  const [profileForm, setProfileForm] = useState({
+    nome_completo: "",
+    documento: "",
+    rg: "",
+    data_nascimento: "",
+    nacionalidade: "Brasileiro(a)",
+    estado_civil: "",
+    profissao: "",
+    telefone: "",
+    email: "",
+    endereco: "",
+    cidade: "",
+    estado: "",
+    cep: "",
+  });
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -513,6 +531,12 @@ export default function App() {
     setError("");
 
     try {
+      const profileRes = await supabase
+        .from("perfis")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
       const propertiesRes = await supabase
         .from("propriedades")
         .select("*")
@@ -543,6 +567,7 @@ export default function App() {
         .order("criado_em", { ascending: false });
 
       const firstError =
+        profileRes.error ||
         propertiesRes.error ||
         tenantsRes.error ||
         contractsRes.error ||
@@ -551,6 +576,27 @@ export default function App() {
 
       if (firstError) {
         setError(firstError.message);
+      }
+
+      setProfile(profileRes.data || null);
+      if (profileRes.data) {
+        setProfileForm({
+          nome_completo: profileRes.data.nome_completo || "",
+          documento: profileRes.data.documento || "",
+          rg: profileRes.data.rg || "",
+          data_nascimento: profileRes.data.data_nascimento || "",
+          nacionalidade: profileRes.data.nacionalidade || "Brasileiro(a)",
+          estado_civil: profileRes.data.estado_civil || "",
+          profissao: profileRes.data.profissao || "",
+          telefone: profileRes.data.telefone || "",
+          email: profileRes.data.email || session.user.email || "",
+          endereco: profileRes.data.endereco || "",
+          cidade: profileRes.data.cidade || "",
+          estado: profileRes.data.estado || "",
+          cep: profileRes.data.cep || "",
+        });
+      } else {
+        setProfileForm((prev) => ({ ...prev, email: session.user.email || "" }));
       }
 
       setProperties(propertiesRes.data || []);
@@ -624,6 +670,55 @@ export default function App() {
 
     return matchesStatus && matchesProperty && matchesTenant && matchesSearch;
   });
+
+  async function saveProfile(e) {
+    e.preventDefault();
+
+    if (!session?.user?.id) {
+      setError("Usuário não autenticado. Saia e entre novamente.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const payload = {
+        user_id: session.user.id,
+        nome_completo: profileForm.nome_completo.trim(),
+        documento: formatDocument(profileForm.documento),
+        rg: profileForm.rg.trim(),
+        data_nascimento: profileForm.data_nascimento || null,
+        nacionalidade: profileForm.nacionalidade.trim(),
+        estado_civil: profileForm.estado_civil.trim(),
+        profissao: profileForm.profissao.trim(),
+        telefone: formatPhone(profileForm.telefone),
+        email: profileForm.email.trim(),
+        endereco: profileForm.endereco.trim(),
+        cidade: profileForm.cidade.trim(),
+        estado: profileForm.estado.trim().toUpperCase(),
+        cep: profileForm.cep.trim(),
+      };
+
+      const { data, error: profileError } = await supabase
+        .from("perfis")
+        .upsert(payload, { onConflict: "user_id" })
+        .select()
+        .single();
+
+      if (profileError) {
+        setError(profileError.message);
+        return;
+      }
+
+      setProfile(data);
+      setError("Perfil salvo com sucesso.");
+    } catch (err) {
+      setError(err?.message || "Erro inesperado ao salvar perfil.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function addProperty(e) {
     e.preventDefault();
@@ -1050,6 +1145,7 @@ export default function App() {
 
   const nav = [
     { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+    { id: "profile", label: "Perfil", icon: UserCog },
     { id: "properties", label: "Imóveis", icon: Building2 },
     { id: "tenants", label: "Inquilinos", icon: Users },
     { id: "contracts", label: "Contratos", icon: FileText },
@@ -1132,6 +1228,58 @@ export default function App() {
             </div>
           ) : (
             <>
+              {active === "profile" && (
+                <section>
+                  <SectionHeader
+                    title="Perfil do locador"
+                    description="Dados usados para gerar contratos, recibos e documentos formais."
+                  />
+
+                  <Card className="rounded-3xl shadow-sm">
+                    <CardContent className="p-5">
+                      <form onSubmit={saveProfile} className="grid gap-3 md:grid-cols-6">
+                        <input placeholder="Nome completo" className="rounded-2xl border p-3 text-sm md:col-span-3" value={profileForm.nome_completo} onChange={(e) => setProfileForm({ ...profileForm, nome_completo: e.target.value })} />
+                        <input placeholder="CPF ou CNPJ" inputMode="numeric" maxLength={18} className="rounded-2xl border p-3 text-sm" value={profileForm.documento} onChange={(e) => setProfileForm({ ...profileForm, documento: formatDocument(e.target.value) })} />
+                        <input placeholder="RG" className="rounded-2xl border p-3 text-sm" value={profileForm.rg} onChange={(e) => setProfileForm({ ...profileForm, rg: e.target.value })} />
+                        <input type="date" className="rounded-2xl border p-3 text-sm" value={profileForm.data_nascimento} onChange={(e) => setProfileForm({ ...profileForm, data_nascimento: e.target.value })} />
+
+                        <input placeholder="Nacionalidade" className="rounded-2xl border p-3 text-sm" value={profileForm.nacionalidade} onChange={(e) => setProfileForm({ ...profileForm, nacionalidade: e.target.value })} />
+                        <select className="rounded-2xl border p-3 text-sm" value={profileForm.estado_civil} onChange={(e) => setProfileForm({ ...profileForm, estado_civil: e.target.value })}>
+                          <option value="">Estado civil</option>
+                          <option>Solteiro(a)</option>
+                          <option>Casado(a)</option>
+                          <option>Divorciado(a)</option>
+                          <option>Viúvo(a)</option>
+                          <option>União estável</option>
+                        </select>
+                        <input placeholder="Profissão" className="rounded-2xl border p-3 text-sm" value={profileForm.profissao} onChange={(e) => setProfileForm({ ...profileForm, profissao: e.target.value })} />
+                        <input placeholder="Telefone com DDD" inputMode="numeric" maxLength={15} className="rounded-2xl border p-3 text-sm" value={profileForm.telefone} onChange={(e) => setProfileForm({ ...profileForm, telefone: formatPhone(e.target.value) })} />
+                        <input placeholder="E-mail" type="email" className="rounded-2xl border p-3 text-sm md:col-span-2" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} />
+
+                        <input placeholder="Endereço completo" className="rounded-2xl border p-3 text-sm md:col-span-3" value={profileForm.endereco} onChange={(e) => setProfileForm({ ...profileForm, endereco: e.target.value })} />
+                        <input placeholder="Cidade" className="rounded-2xl border p-3 text-sm" value={profileForm.cidade} onChange={(e) => setProfileForm({ ...profileForm, cidade: e.target.value })} />
+                        <input placeholder="UF" maxLength={2} className="rounded-2xl border p-3 text-sm" value={profileForm.estado} onChange={(e) => setProfileForm({ ...profileForm, estado: e.target.value.toUpperCase() })} />
+                        <input placeholder="CEP" className="rounded-2xl border p-3 text-sm" value={profileForm.cep} onChange={(e) => setProfileForm({ ...profileForm, cep: e.target.value })} />
+
+                        <Button disabled={saving} className="rounded-2xl md:col-span-6">
+                          {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
+                          Salvar perfil
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  {profile && (
+                    <Card className="mt-5 rounded-3xl bg-slate-900 text-white shadow-sm">
+                      <CardContent className="p-5">
+                        <h3 className="font-bold">Perfil pronto para contratos</h3>
+                        <p className="mt-1 text-sm text-slate-300">Os dados salvos aqui serão usados automaticamente como dados do locador nos contratos em PDF.</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </section>
+              )}
+
               {active === "dashboard" && (
                 <section>
                   <SectionHeader
