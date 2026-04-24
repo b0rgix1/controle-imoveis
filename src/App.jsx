@@ -101,6 +101,7 @@ function sortPayments(paymentsList) {
     Atrasado: 1,
     Pendente: 2,
     Pago: 3,
+    Cancelado: 4,
   };
 
   return [...paymentsList].sort((a, b) => {
@@ -620,6 +621,7 @@ export default function App() {
     const [filterYear, filterMonth] = selectedMonth.split("-").map(Number);
 
     const paymentsInMonth = payments.filter((payment) => {
+      if (payment.status === "Cancelado") return false;
       if (!payment.data_vencimento) return false;
       const date = new Date(`${payment.data_vencimento}T00:00:00`);
       return date.getFullYear() === filterYear && date.getMonth() + 1 === filterMonth;
@@ -1230,8 +1232,31 @@ export default function App() {
       .eq("id", contract.propriedade_id)
       .eq("user_id", session.user.id);
 
+    const { data: canceledPayments, error: paymentCancelError } = await supabase
+      .from("pagamentos")
+      .update({ status: "Cancelado" })
+      .eq("contrato_id", contract.id)
+      .eq("user_id", session.user.id)
+      .in("status", ["Pendente", "Atrasado"])
+      .select("*, contratos(id, propriedades(*), inquilinos(*))");
+
+    if (paymentCancelError) {
+      setError(paymentCancelError.message);
+      return;
+    }
+
     setContracts((prev) => sortContracts(prev.map((item) => (item.id === contract.id ? data : item))));
     setProperties((prev) => prev.map((property) => property.id === contract.propriedade_id ? { ...property, status: "Vago" } : property));
+    if (canceledPayments?.length) {
+      setPayments((prev) =>
+        sortPayments(
+          prev.map((payment) => {
+            const canceled = canceledPayments.find((item) => item.id === payment.id);
+            return canceled || payment;
+          })
+        )
+      );
+    }
     setSuccess("Contrato encerrado com sucesso. O histórico foi mantido.");
   }
 
@@ -2117,6 +2142,7 @@ export default function App() {
                         <option>Atrasado</option>
                         <option>Pendente</option>
                         <option>Pago</option>
+                        <option>Cancelado</option>
                       </select>
 
                       <select
