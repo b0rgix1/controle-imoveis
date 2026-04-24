@@ -471,6 +471,15 @@ export default function App() {
     telefone: "",
     documento: "",
     email: "",
+    rg: "",
+    data_nascimento: "",
+    nacionalidade: "Brasileiro(a)",
+    estado_civil: "",
+    profissao: "",
+    endereco: "",
+    cidade: "",
+    estado: "",
+    cep: "",
   });
 
   const [showContractForm, setShowContractForm] = useState(false);
@@ -549,6 +558,7 @@ export default function App() {
       const tenantsRes = await supabase
         .from("inquilinos")
         .select("*")
+        .eq("user_id", session.user.id)
         .order("criado_em", { ascending: false });
 
       const contractsRes = await supabase
@@ -844,6 +854,15 @@ export default function App() {
       telefone: tenant.telefone || "",
       documento: tenant.documento || "",
       email: tenant.email || "",
+      rg: tenant.rg || "",
+      data_nascimento: tenant.data_nascimento || "",
+      nacionalidade: tenant.nacionalidade || "Brasileiro(a)",
+      estado_civil: tenant.estado_civil || "",
+      profissao: tenant.profissao || "",
+      endereco: tenant.endereco || "",
+      cidade: tenant.cidade || "",
+      estado: tenant.estado || "",
+      cep: tenant.cep || "",
     });
     setShowTenantForm(true);
     setError("");
@@ -852,7 +871,21 @@ export default function App() {
 
   function cancelTenantEdit() {
     setEditingTenantId(null);
-    setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
+    setTenantForm({
+      nome: "",
+      telefone: "",
+      documento: "",
+      email: "",
+      rg: "",
+      data_nascimento: "",
+      nacionalidade: "Brasileiro(a)",
+      estado_civil: "",
+      profissao: "",
+      endereco: "",
+      cidade: "",
+      estado: "",
+      cep: "",
+    });
     setShowTenantForm(false);
   }
 
@@ -874,6 +907,15 @@ export default function App() {
         telefone: formatPhone(tenantForm.telefone),
         documento: formatDocument(tenantForm.documento),
         email: tenantForm.email.trim(),
+        rg: tenantForm.rg.trim(),
+        data_nascimento: tenantForm.data_nascimento || null,
+        nacionalidade: tenantForm.nacionalidade.trim(),
+        estado_civil: tenantForm.estado_civil.trim(),
+        profissao: tenantForm.profissao.trim(),
+        endereco: tenantForm.endereco.trim(),
+        cidade: tenantForm.cidade.trim(),
+        estado: tenantForm.estado.trim().toUpperCase(),
+        cep: tenantForm.cep.trim(),
       };
 
       if (editingTenantId) {
@@ -908,7 +950,21 @@ export default function App() {
         setSuccess("Inquilino cadastrado com sucesso.");
       }
 
-      setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
+      setTenantForm({
+      nome: "",
+      telefone: "",
+      documento: "",
+      email: "",
+      rg: "",
+      data_nascimento: "",
+      nacionalidade: "Brasileiro(a)",
+      estado_civil: "",
+      profissao: "",
+      endereco: "",
+      cidade: "",
+      estado: "",
+      cep: "",
+    });
       setEditingTenantId(null);
       setShowTenantForm(false);
     } catch (err) {
@@ -1552,7 +1608,21 @@ export default function App() {
                     description="Cadastre, acompanhe e exclua inquilinos salvos diretamente no Supabase."
                     action={<Button onClick={() => {
                       setEditingTenantId(null);
-                      setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
+                      setTenantForm({
+                        nome: "",
+                        telefone: "",
+                        documento: "",
+                        email: "",
+                        rg: "",
+                        data_nascimento: "",
+                        nacionalidade: "Brasileiro(a)",
+                        estado_civil: "",
+                        profissao: "",
+                        endereco: "",
+                        cidade: "",
+                        estado: "",
+                        cep: "",
+                      });
                       setShowTenantForm(!showTenantForm);
                     }} className="rounded-2xl"><Plus className="mr-2" size={16} /> Novo inquilino</Button>}
                   />
@@ -1560,8 +1630,29 @@ export default function App() {
                   {showTenantForm && (
                     <Card className="mb-5 rounded-3xl shadow-sm">
                       <CardContent className="p-5">
-                        <form onSubmit={addTenant} className="grid gap-3 md:grid-cols-5">
-                          <input placeholder="Nome completo" className="rounded-2xl border p-3 text-sm md:col-span-2" value={tenantForm.nome} onChange={(e) => setTenantForm({ ...tenantForm, nome: e.target.value })} />
+                        <form onSubmit={addTenant} className="grid gap-3 md:grid-cols-6">
+                          <input placeholder="Nome completo" className="rounded-2xl border p-3 text-sm md:col-span-3" value={tenantForm.nome} onChange={(e) => setTenantForm({ ...tenantForm, nome: e.target.value })} />
+                          <input
+                            placeholder="CPF ou CNPJ"
+                            inputMode="numeric"
+                            maxLength={18}
+                            className="rounded-2xl border p-3 text-sm"
+                            value={tenantForm.documento}
+                            onChange={(e) => setTenantForm({ ...tenantForm, documento: formatDocument(e.target.value) })}
+                          />
+                          <input placeholder="RG" className="rounded-2xl border p-3 text-sm" value={tenantForm.rg} onChange={(e) => setTenantForm({ ...tenantForm, rg: e.target.value })} />
+                          <input type="date" className="rounded-2xl border p-3 text-sm" value={tenantForm.data_nascimento} onChange={(e) => setTenantForm({ ...tenantForm, data_nascimento: e.target.value })} />
+
+                          <input placeholder="Nacionalidade" className="rounded-2xl border p-3 text-sm" value={tenantForm.nacionalidade} onChange={(e) => setTenantForm({ ...tenantForm, nacionalidade: e.target.value })} />
+                          <select className="rounded-2xl border p-3 text-sm" value={tenantForm.estado_civil} onChange={(e) => setTenantForm({ ...tenantForm, estado_civil: e.target.value })}>
+                            <option value="">Estado civil</option>
+                            <option>Solteiro(a)</option>
+                            <option>Casado(a)</option>
+                            <option>Divorciado(a)</option>
+                            <option>Viúvo(a)</option>
+                            <option>União estável</option>
+                          </select>
+                          <input placeholder="Profissão" className="rounded-2xl border p-3 text-sm" value={tenantForm.profissao} onChange={(e) => setTenantForm({ ...tenantForm, profissao: e.target.value })} />
                           <div>
                             <input
                               placeholder="Celular com DDD"
@@ -1573,16 +1664,14 @@ export default function App() {
                             />
                             <p className="mt-1 px-1 text-xs text-slate-500">{getPhoneStatus(tenantForm.telefone)}</p>
                           </div>
-                          <input
-                            placeholder="CPF ou CNPJ"
-                            inputMode="numeric"
-                            maxLength={18}
-                            className="rounded-2xl border p-3 text-sm"
-                            value={tenantForm.documento}
-                            onChange={(e) => setTenantForm({ ...tenantForm, documento: formatDocument(e.target.value) })}
-                          />
-                          <input placeholder="E-mail" className="rounded-2xl border p-3 text-sm" value={tenantForm.email} onChange={(e) => setTenantForm({ ...tenantForm, email: e.target.value })} />
-                          <div className="flex gap-2 md:col-span-5">
+                          <input placeholder="E-mail" type="email" className="rounded-2xl border p-3 text-sm md:col-span-2" value={tenantForm.email} onChange={(e) => setTenantForm({ ...tenantForm, email: e.target.value })} />
+
+                          <input placeholder="Endereço completo" className="rounded-2xl border p-3 text-sm md:col-span-3" value={tenantForm.endereco} onChange={(e) => setTenantForm({ ...tenantForm, endereco: e.target.value })} />
+                          <input placeholder="Cidade" className="rounded-2xl border p-3 text-sm" value={tenantForm.cidade} onChange={(e) => setTenantForm({ ...tenantForm, cidade: e.target.value })} />
+                          <input placeholder="UF" maxLength={2} className="rounded-2xl border p-3 text-sm" value={tenantForm.estado} onChange={(e) => setTenantForm({ ...tenantForm, estado: e.target.value.toUpperCase() })} />
+                          <input placeholder="CEP" className="rounded-2xl border p-3 text-sm" value={tenantForm.cep} onChange={(e) => setTenantForm({ ...tenantForm, cep: e.target.value })} />
+
+                          <div className="flex gap-2 md:col-span-6">
                             <Button disabled={saving} className="flex-1 rounded-2xl">
                               {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
                               {editingTenantId ? "Atualizar inquilino" : "Salvar inquilino"}
@@ -1614,6 +1703,13 @@ export default function App() {
                               <p>Telefone: {tenant.telefone || "Não informado"}</p>
                               <p>{getDocumentLabel(tenant.documento)}: {tenant.documento || "Não informado"}</p>
                               <p>E-mail: {tenant.email || "Não informado"}</p>
+                              <p>RG: {tenant.rg || "Não informado"}</p>
+                              <p>Nascimento: {formatDateBR(tenant.data_nascimento)}</p>
+                              <p>Estado civil: {tenant.estado_civil || "Não informado"}</p>
+                              <p>Profissão: {tenant.profissao || "Não informado"}</p>
+                              <p>Endereço: {tenant.endereco || "Não informado"}</p>
+                              <p>Cidade/UF: {tenant.cidade || "Não informado"}{tenant.estado ? `/${tenant.estado}` : ""}</p>
+                              <p>CEP: {tenant.cep || "Não informado"}</p>
                             </div>
                             {tenant.telefone && (
                               <a
