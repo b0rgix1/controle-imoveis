@@ -1139,6 +1139,14 @@ export default function App() {
 
     try {
       const selectedProperty = properties.find((property) => property.id === contractForm.propriedade_id);
+      const alreadyHasActiveContract = contracts.some(
+        (contract) => contract.propriedade_id === contractForm.propriedade_id && contract.status === "Ativo"
+      );
+
+      if (selectedProperty?.status === "Alugado" || alreadyHasActiveContract) {
+        setError("Este imóvel já está alugado. Encerre ou exclua o contrato ativo antes de criar outro contrato para ele.");
+        return;
+      }
       const rentValue = Number(contractForm.valor_aluguel || selectedProperty?.valor_aluguel || 0);
 
       const { data, error: insertError } = await supabase
@@ -1891,12 +1899,25 @@ export default function App() {
                             }}
                           >
                             <option value="">Selecione o imóvel</option>
-                            {properties.map((property) => (
+                            {properties
+                              .filter((property) => {
+                                const alreadyHasActiveContract = contracts.some(
+                                  (contract) => contract.propriedade_id === property.id && contract.status === "Ativo"
+                                );
+                                return property.status !== "Alugado" && !alreadyHasActiveContract;
+                              })
+                              .map((property) => (
                               <option key={property.id} value={property.id}>
                                 {property.nome} - {currency(property.valor_aluguel)}
                               </option>
                             ))}
                           </select>
+
+                          {properties.filter((property) => property.status !== "Alugado" && !contracts.some((contract) => contract.propriedade_id === property.id && contract.status === "Ativo")).length === 0 && (
+                            <div className="rounded-2xl bg-amber-50 p-3 text-sm font-medium text-amber-700 md:col-span-6">
+                              Não há imóveis disponíveis para novo contrato. Todos os imóveis estão alugados ou possuem contrato ativo.
+                            </div>
+                          )}
 
                           <select
                             className="rounded-2xl border p-3 text-sm md:col-span-2"
