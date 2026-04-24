@@ -444,6 +444,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [profile, setProfile] = useState(null);
   const [properties, setProperties] = useState([]);
@@ -463,6 +464,7 @@ export default function App() {
   });
 
   const [showTenantForm, setShowTenantForm] = useState(false);
+  const [editingTenantId, setEditingTenantId] = useState(null);
   const [tenantForm, setTenantForm] = useState({
     nome: "",
     telefone: "",
@@ -681,6 +683,7 @@ export default function App() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
       const payload = {
@@ -712,7 +715,7 @@ export default function App() {
       }
 
       setProfile(data);
-      setError("Perfil salvo com sucesso.");
+      setSuccess("Perfil salvo com sucesso.");
     } catch (err) {
       setError(err?.message || "Erro inesperado ao salvar perfil.");
     } finally {
@@ -735,6 +738,7 @@ export default function App() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
       const { data, error: insertError } = await supabase
@@ -781,6 +785,25 @@ export default function App() {
     setProperties((prev) => prev.filter((property) => property.id !== id));
   }
 
+  function startEditTenant(tenant) {
+    setEditingTenantId(tenant.id);
+    setTenantForm({
+      nome: tenant.nome || "",
+      telefone: tenant.telefone || "",
+      documento: tenant.documento || "",
+      email: tenant.email || "",
+    });
+    setShowTenantForm(true);
+    setError("");
+    setSuccess("");
+  }
+
+  function cancelTenantEdit() {
+    setEditingTenantId(null);
+    setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
+    setShowTenantForm(false);
+  }
+
   async function addTenant(e) {
     e.preventDefault();
     if (!tenantForm.nome.trim()) {
@@ -790,29 +813,57 @@ export default function App() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
-    const { data, error: insertError } = await supabase
-      .from("inquilinos")
-      .insert({
+    try {
+      const payload = {
         user_id: session.user.id,
         nome: tenantForm.nome.trim(),
         telefone: formatPhone(tenantForm.telefone),
         documento: formatDocument(tenantForm.documento),
         email: tenantForm.email.trim(),
-      })
-      .select()
-      .single();
+      };
 
-    if (insertError) {
-      setError(insertError.message);
+      if (editingTenantId) {
+        const { data, error: updateError } = await supabase
+          .from("inquilinos")
+          .update(payload)
+          .eq("id", editingTenantId)
+          .eq("user_id", session.user.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          setError(updateError.message);
+          return;
+        }
+
+        setTenants((prev) => prev.map((tenant) => (tenant.id === editingTenantId ? data : tenant)));
+        setSuccess("Inquilino atualizado com sucesso.");
+      } else {
+        const { data, error: insertError } = await supabase
+          .from("inquilinos")
+          .insert(payload)
+          .select()
+          .single();
+
+        if (insertError) {
+          setError(insertError.message);
+          return;
+        }
+
+        setTenants((prev) => [data, ...prev]);
+        setSuccess("Inquilino cadastrado com sucesso.");
+      }
+
+      setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
+      setEditingTenantId(null);
+      setShowTenantForm(false);
+    } catch (err) {
+      setError(err?.message || "Erro inesperado ao salvar inquilino.");
+    } finally {
       setSaving(false);
-      return;
     }
-
-    setTenants((prev) => [data, ...prev]);
-    setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
-    setShowTenantForm(false);
-    setSaving(false);
   }
 
   async function deleteTenant(id) {
@@ -845,6 +896,7 @@ export default function App() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
       const selectedProperty = properties.find((property) => property.id === contractForm.propriedade_id);
@@ -930,6 +982,7 @@ export default function App() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     try {
       const generatedPayments = generateMonthlyPayments({
@@ -1031,6 +1084,7 @@ export default function App() {
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
     const { data, error: insertError } = await supabase
       .from("despesas")
@@ -1216,6 +1270,12 @@ export default function App() {
           {error && (
             <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
               Erro: {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
+              {success}
             </div>
           )}
 
@@ -1424,7 +1484,11 @@ export default function App() {
                   <SectionHeader
                     title="Inquilinos"
                     description="Cadastre, acompanhe e exclua inquilinos salvos diretamente no Supabase."
-                    action={<Button onClick={() => setShowTenantForm(!showTenantForm)} className="rounded-2xl"><Plus className="mr-2" size={16} /> Novo inquilino</Button>}
+                    action={<Button onClick={() => {
+                      setEditingTenantId(null);
+                      setTenantForm({ nome: "", telefone: "", documento: "", email: "" });
+                      setShowTenantForm(!showTenantForm);
+                    }} className="rounded-2xl"><Plus className="mr-2" size={16} /> Novo inquilino</Button>}
                   />
 
                   {showTenantForm && (
@@ -1452,10 +1516,17 @@ export default function App() {
                             onChange={(e) => setTenantForm({ ...tenantForm, documento: formatDocument(e.target.value) })}
                           />
                           <input placeholder="E-mail" className="rounded-2xl border p-3 text-sm" value={tenantForm.email} onChange={(e) => setTenantForm({ ...tenantForm, email: e.target.value })} />
-                          <Button disabled={saving} className="rounded-2xl md:col-span-5">
-                            {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
-                            Salvar inquilino
-                          </Button>
+                          <div className="flex gap-2 md:col-span-5">
+                            <Button disabled={saving} className="flex-1 rounded-2xl">
+                              {saving ? <Loader2 className="mr-2 animate-spin" size={16} /> : null}
+                              {editingTenantId ? "Atualizar inquilino" : "Salvar inquilino"}
+                            </Button>
+                            {editingTenantId && (
+                              <Button type="button" onClick={cancelTenantEdit} variant="outline" className="rounded-2xl">
+                                Cancelar
+                              </Button>
+                            )}
+                          </div>
                         </form>
                       </CardContent>
                     </Card>
@@ -1488,6 +1559,9 @@ export default function App() {
                                 Chamar no WhatsApp
                               </a>
                             )}
+                            <Button onClick={() => startEditTenant(tenant)} variant="outline" className="mt-3 w-full rounded-2xl">
+                              Editar inquilino
+                            </Button>
                             <Button onClick={() => deleteTenant(tenant.id)} variant="outline" className="mt-3 w-full rounded-2xl text-red-600 hover:text-red-700">
                               <Trash2 className="mr-2" size={16} /> Excluir inquilino
                             </Button>
