@@ -836,34 +836,48 @@ export default function App() {
   }
 
   const dashboard = useMemo(() => {
-    const [filterYear, filterMonth] = selectedMonth.split("-").map(Number);
-
-    const paymentsInMonth = payments.filter((payment) => {
-      if (payment.status === "Cancelado") return false;
-      if (!payment.data_vencimento) return false;
-      const date = new Date(`${payment.data_vencimento}T00:00:00`);
-      return date.getFullYear() === filterYear && date.getMonth() + 1 === filterMonth;
-    });
-
-    const expensesInMonth = expenses.filter((expense) => {
-      if (!expense.data_despesa) return false;
-      const date = new Date(`${expense.data_despesa}T00:00:00`);
-      return date.getFullYear() === filterYear && date.getMonth() + 1 === filterMonth;
-    });
 
     const rented = properties.filter((p) => p.status === "Alugado").length;
     const vacant = properties.filter((p) => p.status === "Vago").length;
     const maintenance = properties.filter((p) => p.status === "Manutenção").length;
-    const expected = paymentsInMonth.reduce((sum, p) => sum + Number(p.valor || 0), 0);
-    const received = paymentsInMonth.reduce((sum, p) => sum + Number(p.valor_pago || 0), 0);
-    const overdue = paymentsInMonth
-      .filter((p) => p.status === "Atrasado")
-      .reduce((sum, p) => sum + (Number(p.valor || 0) - Number(p.valor_pago || 0)), 0);
-    const expenseTotal = expensesInMonth.reduce((sum, e) => sum + Number(e.valor || 0), 0);
-    const totalRent = properties.reduce((sum, p) => sum + Number(p.valor_aluguel || 0), 0);
+
+    //  CORREÇÃO AQUI
+    const received = payments
+      .filter(p => p.status === "Pago")
+      .reduce((sum, p) => sum + Number(p.valor_pago || p.valor || 0), 0);
+    const pending = payments
+      .filter(p => p.status === "Pendente" || p.status === "Atrasado")
+      .reduce((sum, p) => sum + Number(p.valor || 0), 0);
+
+    const overdue = payments
+      .filter(p => p.status === "Atrasado")
+      .reduce((sum, p) => sum + Number(p.valor || 0), 0);
+
+    const expenseTotal = expenses.reduce(
+      (sum, e) => sum + Number(e.valor || 0),
+      0
+    );
+
+    const totalRent = properties.reduce(
+      (sum, p) => sum + Number(p.valor_aluguel || 0),
+      0
+    );
+
     const netProfit = received - expenseTotal;
-    return { rented, vacant, maintenance, expected, received, overdue, expenseTotal, totalRent, netProfit };
-  }, [properties, payments, expenses, selectedMonth]);
+
+    return {
+      rented,
+      vacant,
+      maintenance,
+      expected: pending,
+      received,
+      overdue,
+      expenseTotal,
+      totalRent,
+      netProfit
+    };
+
+  }, [properties, payments, expenses]);
 
   const propertyReports = useMemo(() => {
     return properties.map((property) => {
@@ -871,10 +885,12 @@ export default function App() {
       const contractIds = propertyContracts.map((contract) => contract.id);
       const propertyPayments = payments.filter((payment) => contractIds.includes(payment.contrato_id));
       const propertyExpenses = expenses.filter((expense) => expense.propriedade_id === property.id);
-      const received = propertyPayments.reduce((sum, payment) => sum + Number(payment.valor_pago || 0), 0);
+      const received = propertyPayments
+        .filter(payment => payment.status === "Pago")
+        .reduce((sum, payment) => sum + Number(payment.valor_pago || payment.valor || 0), 0);
       const pending = propertyPayments
-        .filter((payment) => payment.status !== "Pago")
-        .reduce((sum, payment) => sum + (Number(payment.valor || 0) - Number(payment.valor_pago || 0)), 0);
+        .filter(payment => payment.status === "Pendente" || payment.status === "Atrasado")
+        .reduce((sum, payment) => sum + Number(payment.valor || 0), 0);
       const expenseTotal = propertyExpenses.reduce((sum, expense) => sum + Number(expense.valor || 0), 0);
       const netProfit = received - expenseTotal;
 
