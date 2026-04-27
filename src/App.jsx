@@ -560,15 +560,25 @@ function LoginScreen() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <input
-                type="password"
-                placeholder="Senha"
-                className="w-full rounded-2xl border p-3 text-sm outline-none focus:border-slate-400"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Senha"
+                  className="w-full rounded-2xl border p-3 pr-12 text-sm outline-none focus:border-slate-400"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
+                >
+                  {showPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
 
               {message && (
                 <div className="rounded-2xl bg-slate-100 p-3 text-sm text-slate-700">{message}</div>
