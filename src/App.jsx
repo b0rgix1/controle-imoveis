@@ -192,6 +192,46 @@ function generateLeaseContractPDF(contract, profile) {
   doc.save(`contrato-${fileTenant}-${fileProperty}.pdf`);
 }
 
+function generateReceiptPDF(payment, profile) {
+  const doc = new jsPDF();
+
+  const tenant = payment.contratos?.inquilinos || {};
+  const property = payment.contratos?.propriedades || {};
+
+  const valorPago = Number(payment.valor_pago || payment.valor || 0);
+  const dataPagamento = payment.data_pagamento || new Date().toISOString().slice(0, 10);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("RECIBO DE PAGAMENTO DE ALUGUEL", 105, 25, { align: "center" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+
+  const texto = `
+Recebi de ${tenant.nome || "inquilino não informado"}, referente ao imóvel ${property.nome || "imóvel não informado"}, a quantia de ${currency(valorPago)}, correspondente ao aluguel do período ${payment.referencia_mes || "não informado"}.
+
+Data de vencimento: ${formatDateBR(payment.data_vencimento)}
+Data de pagamento: ${formatDateBR(dataPagamento)}
+
+Para maior clareza, firmo o presente recibo.
+`;
+
+  const lines = doc.splitTextToSize(texto.trim(), 170);
+  doc.text(lines, 20, 45);
+
+  doc.text(`${profile?.cidade || "Cidade"}/${profile?.estado || "UF"}, ${formatDateBR(dataPagamento)}.`, 20, 120);
+
+  doc.line(45, 160, 165, 160);
+  doc.text(profile?.nome_completo || "LOCADOR(A)", 105, 168, { align: "center" });
+  doc.text("LOCADOR(A)", 105, 175, { align: "center" });
+
+  const fileTenant = String(tenant.nome || "inquilino").split(" ").filter(Boolean).join("-").toLowerCase();
+  const fileProperty = String(property.nome || "imovel").split(" ").filter(Boolean).join("-").toLowerCase();
+
+  doc.save(`recibo-${fileTenant}-${fileProperty}-${payment.referencia_mes || "pagamento"}.pdf`);
+}
+
 
 function currency(value) {
   const number = Number(value || 0);
