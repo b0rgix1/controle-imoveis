@@ -469,6 +469,7 @@ function EmptyState({ title, description }) {
 function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState("login");
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [message, setMessage] = useState("");
